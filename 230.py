@@ -23,27 +23,17 @@ class Solution(object):
             else:
                 node = stack.pop()
             
-            if len(stack) == 0:
+            if not stack:
                 break
             
             node = stack.pop()
+            
             if k == 1:
                 return node.val
             else:
                 k-=1
+            
             if node.right:
                 stack.append(node.right)
             else:
                 stack.append(None)
-        
-        '''
-        if root.left == None and root.right == None:
-            return root.val
-        
-        if root.left:
-            self.kthSmallest(root.left, k)
-        val = root.val
-        print(val)
-        if root.right:
-            self.kthSmallest(root.right, k)
-        '''
