@@ -25,5 +25,7 @@ sh bpe_preprocess.sh
 sh preprocess.sh
 ```
 
-
-
+## Model Training
+```
+sh palm-train.sh
+```
