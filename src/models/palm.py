@@ -15,8 +15,9 @@ from fairseq.models.fairseq_encoder import EncoderOut
 import torch
 import torch.nn as nn
 from fairseq import utils
-from fairseq.models import (register_model, register_model_architecture, FairseqModel,FairseqEncoder)
-from fairseq.models.transformer import TransformerModel
+from fairseq.models import (
+    register_model, register_model_architecture, FairseqModel, FairseqEncoder)
+from fairseq.models.transformer import TransformerModel, TransformerDecoder
 # from fairseq.models.masked_lm import MaskedLMEncoder
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 from fairseq.modules import (
@@ -66,6 +67,12 @@ class PALMModel(TransformerModel):
                 args.decoder_embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout, encoder_decoder_attention=True)
             self.copy_alpha_linear = nn.Linear(args.decoder_embed_dim, 1)
 
+    def get_masked_targets(self, sample, net_output):
+        """Get targets from either the sample or the net's output."""
+        print(sample['target'].size())
+        return sample["target"]
+
+
     @classmethod
     def build_model(cls, args, task):
         # set any default arguments
@@ -76,9 +83,9 @@ class PALMModel(TransformerModel):
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
         if src_dict != tgt_dict:
             raise ValueError("PALM requires a joined dictionary")
-        
+
         transformer_model = TransformerModel.build_model(args, task)
-        
+
         encoder = PALMEncoder(args, src_dict)
         # encoder = transformer_model.encoder
         decoder = PALMDecoder(
@@ -105,19 +112,23 @@ class PALMModel(TransformerModel):
             action="store_true",
             help="Apply spectral normalization on the classification head",
         )
-        
+
         parser.add_argument('--copy-attention', default=False, action='store_true',
                             help='train transformer decoder with copy attention')
         parser.add_argument('--copy-attention-heads', type=int, metavar='N', default=1,
                             help='num copy layer attention heads')
         parser.add_argument('--copy-attention-dropout', type=float, metavar='D', default=0.,
                             help='num copy layer attention dropout')
-        
+        parser.add_argument('--force-generation', type=float, metavar='P',
+                            default=None,
+                            help='set the vocabulary distribution weight to P, '
+                                 'instead of predicting it from the input (1.0 '
+                                 'corresponding to generation, 0.0 to pointing)')
 
     @property
     def supported_targets(self):
         return {"self"}
-
+    
     def forward(
         self,
         src_tokens,
@@ -129,16 +140,18 @@ class PALMModel(TransformerModel):
         return_all_hiddens: bool = True,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
+        segment_label=None,
+        masked_token=None
     ):
         if classification_head_name is not None:
             features_only = True
 
         # PALM Encoder
         x, encoder_out = self.encoder(
-            src_tokens,
+            src_tokens, segment_label, masked_token
         )
 
-        #Transformer Encoder
+        # Transformer Encoder
         # encoder_out = self.encoder(
         #     src_tokens,
         #     src_lengths=src_lengths,
@@ -338,6 +351,7 @@ class PALMModel(TransformerModel):
                                 "classification_heads." + k)
                     state_dict[prefix + "classification_heads." + k] = v
 
+
 class PALMEncoder(FairseqEncoder):
     """
     Encoder for Masked Language Modelling.
@@ -380,7 +394,8 @@ class PALMEncoder(FairseqEncoder):
         self.masked_lm_pooler = nn.Linear(
             args.encoder_embed_dim, args.encoder_embed_dim
         )
-        self.pooler_activation = utils.get_activation_fn(args.pooler_activation_fn)
+        self.pooler_activation = utils.get_activation_fn(
+            args.pooler_activation_fn)
 
         self.lm_head_transform_weight = nn.Linear(
             args.encoder_embed_dim, args.encoder_embed_dim
@@ -390,7 +405,8 @@ class PALMEncoder(FairseqEncoder):
 
         self.lm_output_learned_bias = None
         if self.load_softmax:
-            self.lm_output_learned_bias = nn.Parameter(torch.zeros(self.vocab_size))
+            self.lm_output_learned_bias = nn.Parameter(
+                torch.zeros(self.vocab_size))
 
             if not self.share_input_output_embed:
                 self.embed_out = nn.Linear(
@@ -433,13 +449,20 @@ class PALMEncoder(FairseqEncoder):
         )
 
         x = inner_states[-1].transpose(0, 1)
+
+        # Keep original tokens
+        encoder_out = self.layer_norm(self.activation_fn(
+            self.lm_head_transform_weight(x)))
+
         # project masked tokens only
         if masked_tokens is not None:
             x = x[masked_tokens, :]
-        x = self.layer_norm(self.activation_fn(self.lm_head_transform_weight(x)))
 
-        pooled_output = self.pooler_activation(self.masked_lm_pooler(sentence_rep))
-        encoder_out = x
+        x = self.layer_norm(self.activation_fn(
+            self.lm_head_transform_weight(x)))
+
+        pooled_output = self.pooler_activation(
+            self.masked_lm_pooler(sentence_rep))
 
         # project back to size of vocabulary
         if self.share_input_output_embed and hasattr(
@@ -460,6 +483,7 @@ class PALMEncoder(FairseqEncoder):
             "pooled_output": pooled_output,
             "sentence_logits": sentence_logits,
             "encoder_padding_mask": [encoder_padding_mask],
+            "src_tokens": [src_tokens],  # B x T
         }
 
     def max_positions(self):
@@ -626,7 +650,8 @@ class PALMEncoder(FairseqEncoder):
 #         # probabilities.
 #         return probs.clamp(1e-10, 1.0).log() if log_probs else probs
 
-class PALMDecoder(FairseqIncrementalDecoder):
+
+class PALMDecoder(TransformerDecoder):
     """
     Transformer decoder consisting of *args.decoder_layers* layers. Each layer
     is a :class:`TransformerDecoderLayer`.
@@ -640,7 +665,7 @@ class PALMDecoder(FairseqIncrementalDecoder):
 
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         self.args = args
-        super().__init__(dictionary)
+        super().__init__(args, dictionary, embed_tokens, no_encoder_attn=False)
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
 
@@ -748,6 +773,21 @@ class PALMDecoder(FairseqIncrementalDecoder):
                 self.output_projection.weight, mean=0, std=self.output_embed_dim ** -0.5
             )
 
+        # Generation probabilities / interpolation coefficients are predicted
+        # from the current decoder input embedding and the decoder output, which
+        # is the size of output_embed_dim.
+        p_gen_input_size = input_embed_dim + self.output_embed_dim
+        self.project_p_gens = nn.Linear(p_gen_input_size, 1)
+        nn.init.zeros_(self.project_p_gens.bias)
+
+        # The dictionary may include a separate entry for an OOV token in each
+        # input position, so that their identity can be restored from the
+        # original source text.
+        self.num_types = len(dictionary)
+        # self.num_oov_types = args.source_position_markers
+        self.num_oov_types = 0
+        self.num_embeddings = self.num_types - self.num_oov_types
+        self.force_p_gen = args.force_generation
 
         self.copy_attention = args.copy_attention
         self.attention_dropout = args.attention_dropout
@@ -755,8 +795,8 @@ class PALMDecoder(FairseqIncrementalDecoder):
             self.copy_attn_layer = MultiheadAttention(
                 embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout)
             self.copy_alpha_linear = nn.Linear(embed_dim, 1)
-            #torch.nn.init.constant_(self.copy_alpha_linear.bias, 1.)
-        # self.classifier = nn.Linear(embed_dim, 2)        
+            torch.nn.init.constant_(self.copy_alpha_linear.bias, 1.)
+        self.classifier = nn.Linear(embed_dim, 2)
 
     def build_decoder_layer(self, args, no_encoder_attn=False):
         layer = TransformerDecoderLayer(args, no_encoder_attn)
@@ -801,8 +841,22 @@ class PALMDecoder(FairseqIncrementalDecoder):
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
         )
+        # if not features_only:
+        #     x = self.output_layer(x)
         if not features_only:
-            x = self.output_layer(x)
+            # Embedding the tokens again for generation probability prediction,
+            # so that we don't have to reimplement the whole extract_features()
+            # method.
+            if incremental_state is not None:
+                prev_output_tokens = prev_output_tokens[:, -1:]
+            prev_output_embed = self.embed_tokens(prev_output_tokens)
+            prev_output_embed *= self.embed_scale
+            predictors = torch.cat((prev_output_embed, x), 2)
+            p_gens = self.project_p_gens(predictors)
+            p_gens = torch.sigmoid(p_gens)
+            x = self.output_layer(
+                x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
+
         return x, extra
 
     def extract_features(
@@ -947,7 +1001,7 @@ class PALMDecoder(FairseqIncrementalDecoder):
             )
             x_copy = x_copy.transpose(0, 1)
             copy_alpha = torch.sigmoid(self.copy_alpha_linear(x_copy))
-            attn = copy_attn # use copy attn for alignment
+            attn = copy_attn  # use copy attn for alignment
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
@@ -958,15 +1012,68 @@ class PALMDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": [attn], "inner_states": inner_states}
+        return x, {"attn": [attn], "inner_states": inner_states, "encoder_out": encoder_out}
 
-    def output_layer(self, features):
-        """Project features to the vocabulary size."""
-        if self.adaptive_softmax is None:
-            # project back to size of vocabulary
-            return self.output_projection(features)
-        else:
-            return features
+    # def output_layer(self, features):
+    #     """Project features to the vocabulary size."""
+    #     if self.adaptive_softmax is None:
+    #         # project back to size of vocabulary
+    #         return self.output_projection(features)
+    #     else:
+    #         return features
+
+    def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
+        """
+        Project features to the vocabulary size and mix with the attention
+        distributions.
+        """
+        if self.force_p_gen is not None:
+            p_gens = self.force_p_gen
+
+        # project back to size of vocabulary
+        logits = super().output_layer(features, **kwargs)
+
+        batch_size = logits.shape[0]
+        output_length = logits.shape[1]
+        assert logits.shape[2] == self.num_embeddings
+        assert src_tokens.shape[0] == batch_size
+        src_length = src_tokens.shape[1]
+
+        # The final output distribution will be a mixture of the normal output
+        # distribution (softmax of logits) and attention weights.
+        gen_dists = super().get_normalized_probs(
+            (logits, None), log_probs=False, sample=None
+        )
+        gen_dists = torch.mul(gen_dists, p_gens)
+        padding_size = (batch_size, output_length, self.num_oov_types)
+        padding = gen_dists.new_zeros(padding_size)
+        gen_dists = torch.cat((gen_dists, padding), 2)
+        assert gen_dists.shape[2] == self.num_types
+
+        # Scatter attention distributions to distributions over the extended
+        # vocabulary in a tensor of shape [batch_size, output_length,
+        # vocab_size]. Each attention weight will be written into a location
+        # that is for other dimensions the same as in the index tensor, but for
+        # the third dimension it's the value of the index tensor (the token ID).
+        attn = torch.mul(attn, 1 - p_gens)
+        index = src_tokens[:, None, :]
+        index = index.expand(batch_size, output_length, src_length)
+        attn_dists_size = (batch_size, output_length, self.num_types)
+        attn_dists = attn.new_zeros(attn_dists_size)
+        attn_dists.scatter_add_(2, index, attn)
+
+        # Final distributions, [batch_size, output_length, num_types].
+        return gen_dists + attn_dists
+
+    def get_normalized_probs(self, net_output, log_probs, sample):
+        """
+        Get normalized probabilities (or log probs) from a net's output.
+        Pointer-generator network output is already normalized.
+        """
+        probs = net_output[0]
+        # Make sure the probabilities are greater than zero when returning log
+        # probabilities.
+        return probs.clamp(1e-10, 1.0).log() if log_probs else probs
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""
