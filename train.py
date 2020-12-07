@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Train a new model on one or across multiple GPUs.
+Train a new model on one or across multiple GPUs or Azure Machine Learning Platform.
 """
 
 import collections
@@ -47,13 +47,15 @@ def main(args, init_distributed=False):
     if init_distributed:
         import socket
         args.distributed_rank = distributed_utils.distributed_init(args)
-        print('| initialized host {} as rank {}'.format(socket.gethostname(), args.distributed_rank))
+        print('| initialized host {} as rank {}'.format(
+            socket.gethostname(), args.distributed_rank))
 
     # Build model and criterion
     model = task.build_model(args)
     criterion = task.build_criterion(args)
     print(model)
-    print('| model {}, criterion {}'.format(args.arch, criterion.__class__.__name__))
+    print('| model {}, criterion {}'.format(
+        args.arch, criterion.__class__.__name__))
     print('| num. model params: {} (num. trained: {})'.format(
         sum(p.numel() for p in model.parameters()),
         sum(p.numel() for p in model.parameters() if p.requires_grad),
@@ -66,7 +68,8 @@ def main(args, init_distributed=False):
         task.max_positions(),
         model.max_positions(),
     )
-    dummy_batch = task.dataset('train').get_dummy_batch(args.max_tokens, max_positions)
+    dummy_batch = task.dataset('train').get_dummy_batch(
+        args.max_tokens, max_positions)
     oom_batch = task.dataset('train').get_dummy_batch(1, max_positions)
 
     model.copy_pretrained_params(args)
@@ -105,7 +108,7 @@ def main(args, init_distributed=False):
     train_meter.start()
     valid_losses = [None]
     valid_subsets = args.valid_subset.split(',')
-    # azure machine learning 
+    # azure machine learning
     if args.azure_ml:
         aml_run = Run.get_context()
     while lr > args.min_lr and epoch_itr.epoch < max_epoch and trainer.get_num_updates() < max_update:
@@ -116,13 +119,16 @@ def main(args, init_distributed=False):
             train(args, trainer, task, epoch_itr, None)
 
         if epoch_itr.epoch % args.validate_interval == 0:
-            valid_losses = validate(args, trainer, task, epoch_itr, valid_subsets)
+            valid_losses = validate(
+                args, trainer, task, epoch_itr, valid_subsets)
             # ema process
             if not args.no_ema:
                 old_data = ema_restore(trainer.ema, trainer.model)
-                valid_losses_ema = validate(args, trainer, task, epoch_itr, valid_subsets)
+                valid_losses_ema = validate(
+                    args, trainer, task, epoch_itr, valid_subsets)
                 if epoch_itr.epoch % args.save_interval == 0:
-                    save_checkpoint(args, trainer, epoch_itr, valid_losses_ema[0], suffix='ema')
+                    save_checkpoint(args, trainer, epoch_itr,
+                                    valid_losses_ema[0], suffix='ema')
                 ema_reverse(trainer.ema, trainer.model, old_data)
 
         # only use first validation loss to update the learning rate
@@ -142,7 +148,7 @@ def train(args, trainer, task, epoch_itr, aml_run):
     """Train the model for one epoch."""
     # Update parameters every N batches
     update_freq = args.update_freq[epoch_itr.epoch - 1] \
-            if epoch_itr.epoch <= len(args.update_freq) else args.update_freq[-1]
+        if epoch_itr.epoch <= len(args.update_freq) else args.update_freq[-1]
 
     # Initialize data iterator
     itr = epoch_itr.next_epoch_itr(
@@ -151,7 +157,7 @@ def train(args, trainer, task, epoch_itr, aml_run):
     )
     itr = iterators.GroupedIterator(itr, update_freq)
     progress = progress_bar.build_progress_bar(
-        args, itr, epoch_itr.epoch, no_progress_bar='simple',aml_run=aml_run
+        args, itr, epoch_itr.epoch, no_progress_bar='simple', aml_run=aml_run
     )
     extra_meters = collections.defaultdict(lambda: AverageMeter())
     first_valid = args.valid_subset.split(',')[0]
@@ -180,7 +186,8 @@ def train(args, trainer, task, epoch_itr, aml_run):
 
         num_updates = trainer.get_num_updates()
         if args.save_interval_updates > 0 and num_updates % args.save_interval_updates == 0 and num_updates > 0:
-            valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
+            valid_losses = validate(
+                args, trainer, task, epoch_itr, [first_valid])
             save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
         if num_updates >= max_update:
@@ -230,7 +237,7 @@ def validate(args, trainer, task, epoch_itr, subsets):
     """Evaluate the model on the validation set(s) and return the losses."""
     valid_losses = []
     for subset in subsets:
-        #print(subset)
+        # print(subset)
         # Initialize data iterator
         itr = task.get_batch_iterator(
             dataset=task.dataset(subset),
@@ -259,7 +266,7 @@ def validate(args, trainer, task, epoch_itr, subsets):
                 meter.reset()
         extra_meters = collections.defaultdict(lambda: AverageMeter())
         for sample in progress:
-            #print(sample)
+            # print(sample)
             log_output = trainer.valid_step(sample)
 
             for k, v in log_output.items():
@@ -308,20 +315,21 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss, suffix=''):
 
     checkpoint_conds = collections.OrderedDict()
     checkpoint_conds['checkpoint{}{}.pt'.format(suffix, epoch)] = (
-            end_of_epoch and not args.no_epoch_checkpoints and
-            epoch % args.save_interval == 0
+        end_of_epoch and not args.no_epoch_checkpoints and
+        epoch % args.save_interval == 0
     )
     checkpoint_conds['checkpoint{}_{}_{}.pt'.format(suffix, epoch, updates)] = (
-            not end_of_epoch and args.save_interval_updates > 0 and
-            updates % args.save_interval_updates == 0
+        not end_of_epoch and args.save_interval_updates > 0 and
+        updates % args.save_interval_updates == 0
     )
     checkpoint_conds['checkpoint_best.pt'] = (
-            val_loss is not None and len(suffix) == 0 and
-            (not hasattr(save_checkpoint, 'best') or val_loss < save_checkpoint.best)
+        val_loss is not None and len(suffix) == 0 and
+        (not hasattr(save_checkpoint, 'best') or val_loss < save_checkpoint.best)
     )
-    checkpoint_conds['checkpoint{}_last.pt'.format(suffix)] = True  # keep this last so that it's a symlink
+    # keep this last so that it's a symlink
+    checkpoint_conds['checkpoint{}_last.pt'.format(suffix)] = True
 
-    if len(suffix) == 0: # update best only when suffix is empty
+    if len(suffix) == 0:  # update best only when suffix is empty
         prev_best = getattr(save_checkpoint, 'best', val_loss)
         if val_loss is not None:
             save_checkpoint.best = min(val_loss, prev_best)
@@ -332,21 +340,24 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss, suffix=''):
     if hasattr(save_checkpoint, 'best'):
         extra_state.update({'best': save_checkpoint.best})
 
-    checkpoints = [os.path.join(args.save_dir, fn) for fn, cond in checkpoint_conds.items() if cond]
+    checkpoints = [os.path.join(args.save_dir, fn)
+                   for fn, cond in checkpoint_conds.items() if cond]
     if len(checkpoints) > 0:
         for cp in checkpoints:
             trainer.save_checkpoint(cp, extra_state)
 
     if not end_of_epoch and args.keep_interval_updates > 0:
         # remove old checkpoints; checkpoints are sorted in descending order
-        checkpoints = utils.checkpoint_paths(args.save_dir, pattern=r'checkpoint_\d+_(\d+)\.pt')
+        checkpoints = utils.checkpoint_paths(
+            args.save_dir, pattern=r'checkpoint_\d+_(\d+)\.pt')
         for old_chk in checkpoints[args.keep_interval_updates:]:
             if os.path.lexists(old_chk):
                 os.remove(old_chk)
 
     if args.keep_last_epochs > 0:
         # remove old epoch checkpoints; checkpoints are sorted in descending order
-        checkpoints = utils.checkpoint_paths(args.save_dir, pattern=r'checkpoint' +  suffix + '\d+\.pt')
+        checkpoints = utils.checkpoint_paths(
+            args.save_dir, pattern=r'checkpoint' + suffix + '\d+\.pt')
         for old_chk in checkpoints[args.keep_last_epochs:]:
             if os.path.lexists(old_chk):
                 os.remove(old_chk)
@@ -405,7 +416,7 @@ def distributed_main(i, args):
 def cli_main():
     parser = options.get_training_parser()
     args = options.parse_args_and_arch(parser)
-    
+
     '''
     try:
         git_branch = subprocess.check_output(['git', 'symbolic-ref', '--short', 'HEAD'])
@@ -427,7 +438,8 @@ def cli_main():
     elif args.distributed_world_size > 1:
         # fallback for single node with multiple GPUs
         port = random.randint(10000, 20000)
-        args.distributed_init_method = 'tcp://localhost:{port}'.format(port=port)
+        args.distributed_init_method = 'tcp://localhost:{port}'.format(
+            port=port)
         args.distributed_rank = None  # set based on device id
         if max(args.update_freq) > 1 and args.ddp_backend != 'no_c10d':
             print('| NOTE: you may get better performance with: --ddp-backend=no_c10d')
