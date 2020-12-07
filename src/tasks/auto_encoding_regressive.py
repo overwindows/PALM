@@ -26,7 +26,7 @@ from fairseq.data import (
 from fairseq.tasks import register_task, LegacyFairseqTask
 # from fairseq.tasks.translation import TranslationTask
 
-from 
+from src.data.masked_pair_dataset import LanguagePairDataset
 
 EVAL_BLEU_ORDER = 4
 
@@ -184,6 +184,7 @@ def load_langpair_dataset(
         tgt_dataset,
         tgt_dataset_sizes,
         tgt_dict,
+        masked_src_dataset,
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset,

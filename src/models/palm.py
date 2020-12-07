@@ -69,8 +69,9 @@ class PALMModel(TransformerModel):
 
     def get_masked_targets(self, sample, net_output):
         """Get targets from either the sample or the net's output."""
-        print(sample['target'].size())
-        return sample["target"]
+        # print(sample.keys())
+        # print(sample['masked_source'].size())
+        return sample["masked_source"]
 
 
     @classmethod
