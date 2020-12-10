@@ -187,7 +187,7 @@ def load_langpair_dataset(
         # for Mask LM loss calculation.
         masked_src_dataset,
         masked_src_dataset.sizes,
-        
+
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset,

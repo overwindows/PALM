@@ -258,6 +258,8 @@ class LanguagePairDataset(FairseqDataset):
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
         self.masked_src_sizes = np.array(masked_src_sizes)
 
+        # assert self.src_sizes == self.masked_src_sizes
+
         self.sizes = (
             np.vstack((self.src_sizes, self.tgt_sizes)).T
             if self.tgt_sizes is not None

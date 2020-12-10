@@ -44,11 +44,11 @@ class PALMModel(TransformerModel):
     @classmethod
     def hub_models(cls):
         return {
-            # "bart.base": "http://dl.fbaipublicfiles.com/fairseq/models/bart.base.tar.gz",
-            # "bart.large": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.tar.gz",
-            # "bart.large.mnli": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.mnli.tar.gz",
-            # "bart.large.cnn": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.cnn.tar.gz",
-            # "bart.large.xsum": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.xsum.tar.gz",
+            # "palm.base": "http://dl.fbaipublicfiles.com/fairseq/models/bart.base.tar.gz",
+            # "palm.large": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.tar.gz",
+            # "palm.large.mnli": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.mnli.tar.gz",
+            # "palm.large.cnn": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.cnn.tar.gz",
+            # "palm.large.xsum": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.xsum.tar.gz",
         }
 
     def __init__(self, args, encoder, decoder):
@@ -67,7 +67,7 @@ class PALMModel(TransformerModel):
                 args.decoder_embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout, encoder_decoder_attention=True)
             self.copy_alpha_linear = nn.Linear(args.decoder_embed_dim, 1)
 
-    def get_masked_targets(self, sample, net_output):
+    def get_masked_targets(self, sample):
         """Get targets from either the sample or the net's output."""
         # print(sample.keys())
         # print(sample['masked_source'].size())
@@ -133,7 +133,8 @@ class PALMModel(TransformerModel):
         self,
         src_tokens,
         src_lengths,
-        prev_output_tokens,
+        masked_tokens = None,
+        prev_output_tokens = None,
         features_only: bool = False,
         classification_head_name: Optional[str] = None,
         token_embeddings: Optional[torch.Tensor] = None,
@@ -141,14 +142,13 @@ class PALMModel(TransformerModel):
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
         segment_label=None,
-        masked_token=None
     ):
         if classification_head_name is not None:
             features_only = True
 
         # PALM Encoder
         x, encoder_out = self.encoder(
-            src_tokens, segment_label, masked_token
+            src_tokens, segment_label, masked_tokens
         )
 
         # Transformer Encoder
@@ -455,6 +455,7 @@ class PALMEncoder(FairseqEncoder):
             self.lm_head_transform_weight(x)))
 
         # project masked tokens only
+        # print(masked_tokens)
         if masked_tokens is not None:
             x = x[masked_tokens, :]
 

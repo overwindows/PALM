@@ -40,6 +40,24 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
+        masked_tokens = sample["masked_source"].ne(self.padding_idx)
+        sample_size = masked_tokens.int().sum()
+
+        if masked_tokens.device == torch.device("cpu"):
+            if not masked_tokens.any():
+                masked_tokens = None
+        else:
+            masked_tokens = torch.where(
+                masked_tokens.any(),
+                masked_tokens,
+                masked_tokens.new([True]),
+            )
+
+        masked_targets = model.get_masked_targets(sample)
+        if masked_tokens is not None:
+            masked_targets = masked_targets[masked_tokens]
+        
+        sample["net_input"]['masked_tokens'] = masked_tokens
         net_output = model(**sample["net_input"])
         loss, nll_loss = self.compute_loss(
             model, net_output, sample, reduce=reduce)
@@ -65,7 +83,7 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
             logging_output["alignment_loss"] = utils.item(alignment_loss.data)
             loss += self.alignment_lambda * alignment_loss
 
-        masked_loss = self.compute_masked_loss(model, sample, net_output)
+        masked_loss = self.compute_masked_loss(masked_targets, net_output)
         loss += masked_loss
 
         return loss, sample_size, logging_output
@@ -90,29 +108,19 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
 
         return loss
 
-    def compute_masked_loss(self, model, sample, net_output):
+    def compute_masked_loss(self, targets, net_output):
         # print(sample['masked_source'])
-        masked_tokens = sample["masked_source"].ne(self.padding_idx)
+        
         # print(masked_tokens)
-        sample_size = masked_tokens.int().sum()
+        
 
         # Rare: when all tokens are masked, project all tokens.
         # We use torch.where to avoid device-to-host transfers,
         # except on CPU where torch.where is not well supported
         # (see github.com/pytorch/pytorch/issues/26247).
 
-        if masked_tokens.device == torch.device("cpu"):
-            if not masked_tokens.any():
-                masked_tokens = None
-        else:
-            masked_tokens = torch.where(
-                masked_tokens.any(),
-                masked_tokens,
-                masked_tokens.new([True]),
-            )
-
         encoder_logits = net_output[1]["encoder_out"]['masked_out']
-        targets = model.get_masked_targets(sample, [encoder_logits])
+        
         
         # print(targets.size(), masked_tokens.size())
         # if masked_tokens is not None:
