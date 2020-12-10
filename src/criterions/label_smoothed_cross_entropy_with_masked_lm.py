@@ -41,7 +41,7 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         3) logging outputs to display while training
         """
         masked_tokens = sample["masked_source"].ne(self.padding_idx)
-        sample_size = masked_tokens.int().sum()
+        masked_sample_size = masked_tokens.int().sum()
 
         if masked_tokens.device == torch.device("cpu"):
             if not masked_tokens.any():
@@ -56,17 +56,21 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         masked_targets = model.get_masked_targets(sample)
         if masked_tokens is not None:
             masked_targets = masked_targets[masked_tokens]
-        
-        sample["net_input"]['masked_tokens'] = masked_tokens
-        net_output = model(**sample["net_input"])
+
+        # sample["net_input"]['masked_tokens'] = masked_tokens
+        net_output = model(**sample["net_input"], masked_tokens=masked_tokens)
         loss, nll_loss = self.compute_loss(
             model, net_output, sample, reduce=reduce)
         sample_size = (
             sample["target"].size(
                 0) if self.sentence_avg else sample["ntokens"]
         )
+
+        masked_loss = self.compute_masked_loss(masked_targets, net_output)
+
         logging_output = {
             "loss": utils.item(loss.data) if reduce else loss.data,
+            "masked_loss": utils.item(masked_loss.data) if reduce else masked_loss.data,
             "nll_loss": utils.item(nll_loss.data) if reduce else nll_loss.data,
             "ntokens": sample["ntokens"],
             "nsentences": sample["target"].size(0),
@@ -83,7 +87,7 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
             logging_output["alignment_loss"] = utils.item(alignment_loss.data)
             loss += self.alignment_lambda * alignment_loss
 
-        masked_loss = self.compute_masked_loss(masked_targets, net_output)
+        
         loss += masked_loss
 
         return loss, sample_size, logging_output
@@ -110,9 +114,8 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
 
     def compute_masked_loss(self, targets, net_output):
         # print(sample['masked_source'])
-        
+
         # print(masked_tokens)
-        
 
         # Rare: when all tokens are masked, project all tokens.
         # We use torch.where to avoid device-to-host transfers,
@@ -120,11 +123,10 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         # (see github.com/pytorch/pytorch/issues/26247).
 
         encoder_logits = net_output[1]["encoder_out"]['masked_out']
-        
-        
+
         # print(targets.size(), masked_tokens.size())
         # if masked_tokens is not None:
-            # targets = targets[masked_tokens]
+        # targets = targets[masked_tokens]
         # if targets.size() != masked_tokens.size():
         # print(targets.size(), masked_tokens.size())
         #     return .0
@@ -142,6 +144,9 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         """Aggregate logging outputs from data parallel training."""
         loss_sum = utils.item(sum(log.get("loss", 0)
                                   for log in logging_outputs))
+        masked_loss_sum = utils.item(
+            sum(log.get("masked_loss", 0) for log in logging_outputs)
+        )
         nll_loss_sum = utils.item(
             sum(log.get("nll_loss", 0) for log in logging_outputs)
         )

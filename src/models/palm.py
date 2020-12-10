@@ -3,8 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 """
-BART: Denoising Sequence-to-Sequence Pre-training for
-Natural Language Generation, Translation, and Comprehension
+PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation
 """
 from typing import Optional
 import math
@@ -18,7 +17,6 @@ from fairseq import utils
 from fairseq.models import (
     register_model, register_model_architecture, FairseqModel, FairseqEncoder)
 from fairseq.models.transformer import TransformerModel, TransformerDecoder
-# from fairseq.models.masked_lm import MaskedLMEncoder
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 from fairseq.modules import (
     MultiheadAttention,
@@ -44,11 +42,11 @@ class PALMModel(TransformerModel):
     @classmethod
     def hub_models(cls):
         return {
-            # "palm.base": "http://dl.fbaipublicfiles.com/fairseq/models/bart.base.tar.gz",
-            # "palm.large": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.tar.gz",
-            # "palm.large.mnli": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.mnli.tar.gz",
-            # "palm.large.cnn": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.cnn.tar.gz",
-            # "palm.large.xsum": "http://dl.fbaipublicfiles.com/fairseq/models/bart.large.xsum.tar.gz",
+            "palm.base": None,
+            "palm.large": None,
+            "palm.large.mnli": None,
+            "palm.large.cnn": None,
+            "palm.large.xsum": None,
         }
 
     def __init__(self, args, encoder, decoder):
@@ -133,8 +131,8 @@ class PALMModel(TransformerModel):
         self,
         src_tokens,
         src_lengths,
-        masked_tokens = None,
-        prev_output_tokens = None,
+        masked_tokens=None,
+        prev_output_tokens=None,
         features_only: bool = False,
         classification_head_name: Optional[str] = None,
         token_embeddings: Optional[torch.Tensor] = None,
@@ -359,7 +357,7 @@ class PALMEncoder(FairseqEncoder):
 
     def __init__(self, args, dictionary):
         super().__init__(dictionary)
-        print(args.act_dropout)
+        # print(args.act_dropout)
         self.padding_idx = dictionary.pad()
         self.vocab_size = dictionary.__len__()
         self.max_source_positions = args.max_positions
@@ -455,7 +453,6 @@ class PALMEncoder(FairseqEncoder):
             self.lm_head_transform_weight(x)))
 
         # project masked tokens only
-        # print(masked_tokens)
         if masked_tokens is not None:
             x = x[masked_tokens, :]
 
@@ -508,6 +505,7 @@ class PALMEncoder(FairseqEncoder):
                 ):
                     del state_dict[k]
         return state_dict
+
 
 class PALMDecoder(TransformerDecoder):
     """
@@ -699,8 +697,7 @@ class PALMDecoder(TransformerDecoder):
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
         )
-        # if not features_only:
-        #     x = self.output_layer(x)
+        assert not features_only
         if not features_only:
             # Embedding the tokens again for generation probability prediction,
             # so that we don't have to reimplement the whole extract_features()
