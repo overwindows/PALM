@@ -91,7 +91,9 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         return loss
 
     def compute_masked_loss(self, model, sample, net_output):
+        # print(sample['masked_source'])
         masked_tokens = sample["masked_source"].ne(self.padding_idx)
+        # print(masked_tokens)
         sample_size = masked_tokens.int().sum()
 
         # Rare: when all tokens are masked, project all tokens.
@@ -99,8 +101,6 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         # except on CPU where torch.where is not well supported
         # (see github.com/pytorch/pytorch/issues/26247).
 
-        # if self.tpu:
-        #    masked_tokens = None  # always project all tokens on TPU
         if masked_tokens.device == torch.device("cpu"):
             if not masked_tokens.any():
                 masked_tokens = None
@@ -111,18 +111,17 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
                 masked_tokens.new([True]),
             )
 
-        # logits = model(**sample["net_input"], masked_tokens=masked_tokens)[0]
-        # print(net_output[1]["encoder_out"].keys())
-        logits = net_output[1]["encoder_out"]['encoder_out'][0]
-        targets = model.get_masked_targets(sample, [logits])
+        encoder_logits = net_output[1]["encoder_out"]['masked_out']
+        targets = model.get_masked_targets(sample, [encoder_logits])
         
-        if masked_tokens is not None:
-            targets = targets[masked_tokens]
-        if targets.size() != masked_tokens.size():
-            print(targets.size(), logits.size(), masked_tokens.size())
-            return .0
+        # print(targets.size(), masked_tokens.size())
+        # if masked_tokens is not None:
+            # targets = targets[masked_tokens]
+        # if targets.size() != masked_tokens.size():
+        # print(targets.size(), masked_tokens.size())
+        #     return .0
         loss = modules.cross_entropy(
-            logits.view(-1, logits.size(-1)),
+            encoder_logits.view(-1, encoder_logits.size(-1)),
             targets.view(-1),
             reduction="sum",
             ignore_index=self.padding_idx,

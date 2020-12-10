@@ -73,7 +73,6 @@ class PALMModel(TransformerModel):
         # print(sample['masked_source'].size())
         return sample["masked_source"]
 
-
     @classmethod
     def build_model(cls, args, task):
         # set any default arguments
@@ -129,7 +128,7 @@ class PALMModel(TransformerModel):
     @property
     def supported_targets(self):
         return {"self"}
-    
+
     def forward(
         self,
         src_tokens,
@@ -385,8 +384,8 @@ class PALMEncoder(FairseqEncoder):
 
         self.share_input_output_embed = args.share_encoder_input_output_embed
         self.embed_out = None
-        self.sentence_projection_layer = None
-        self.sentence_out_dim = args.sentence_class_num
+        # self.sentence_projection_layer = None
+        # self.sentence_out_dim = args.sentence_class_num
         self.lm_output_learned_bias = None
 
         # Remove head is set to true during fine-tuning
@@ -414,10 +413,10 @@ class PALMEncoder(FairseqEncoder):
                     args.encoder_embed_dim, self.vocab_size, bias=False
                 )
 
-            if args.sent_loss:
-                self.sentence_projection_layer = nn.Linear(
-                    args.encoder_embed_dim, self.sentence_out_dim, bias=False
-                )
+            # if args.sent_loss:
+            #     self.sentence_projection_layer = nn.Linear(
+            #         args.encoder_embed_dim, self.sentence_out_dim, bias=False
+            #     )
 
     def forward(self, src_tokens, segment_labels=None, masked_tokens=None, **unused):
         """
@@ -475,14 +474,15 @@ class PALMEncoder(FairseqEncoder):
         if self.lm_output_learned_bias is not None:
             x = x + self.lm_output_learned_bias
         sentence_logits = None
-        if self.sentence_projection_layer:
-            sentence_logits = self.sentence_projection_layer(pooled_output)
+        # if self.sentence_projection_layer:
+        #     sentence_logits = self.sentence_projection_layer(pooled_output)
 
         return x, {
             "encoder_out": [encoder_out],
+            "masked_out": x,
             "inner_states": inner_states,
             "pooled_output": pooled_output,
-            "sentence_logits": sentence_logits,
+            # "sentence_logits": sentence_logits,
             "encoder_padding_mask": [encoder_padding_mask],
             "src_tokens": [src_tokens],  # B x T
         }
@@ -507,150 +507,6 @@ class PALMEncoder(FairseqEncoder):
                 ):
                     del state_dict[k]
         return state_dict
-
-# class TransformerPointerGeneratorDecoder(TransformerDecoder):
-#     """
-#     Transformer decoder consisting of *args.decoder_layers* layers. Each layer
-#     is a :class:`TransformerDecoderLayer`. The pointer-generator variant mixes
-#     the output probabilities with an attention distribution in the output layer.
-#     Args:
-#         args (argparse.Namespace): parsed command-line arguments
-#         dictionary (~fairseq.data.Dictionary): decoding dictionary
-#         embed_tokens (torch.nn.Embedding): output embedding
-#     """
-
-#     def __init__(self, args, dictionary, embed_tokens):
-#         super().__init__(args, dictionary, embed_tokens, no_encoder_attn=False)
-
-#         # In the pointer-generator model these arguments define the decoder
-#         # layer and the number of attention heads that will be averaged to
-#         # create the alignment for pointing.
-#         self.alignment_heads = args.alignment_heads
-#         self.alignment_layer = args.alignment_layer
-
-#         input_embed_dim = embed_tokens.embedding_dim
-
-#         # Generation probabilities / interpolation coefficients are predicted
-#         # from the current decoder input embedding and the decoder output, which
-#         # is the size of output_embed_dim.
-#         p_gen_input_size = input_embed_dim + self.output_embed_dim
-#         self.project_p_gens = nn.Linear(p_gen_input_size, 1)
-#         nn.init.zeros_(self.project_p_gens.bias)
-
-#         # The dictionary may include a separate entry for an OOV token in each
-#         # input position, so that their identity can be restored from the
-#         # original source text.
-#         self.num_types = len(dictionary)
-#         self.num_oov_types = args.source_position_markers
-#         self.num_embeddings = self.num_types - self.num_oov_types
-#         self.force_p_gen = args.force_generation
-
-#     def forward(
-#         self,
-#         prev_output_tokens,
-#         encoder_out: Optional[EncoderOut] = None,
-#         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-#         features_only: bool = False,
-#         alignment_layer: Optional[int] = 0,
-#         alignment_heads: Optional[int] = 1,
-#         src_lengths: Optional[Any] = None,
-#         return_all_hiddens: bool = False,
-#     ):
-#         """
-#         Args:
-#             prev_output_tokens (LongTensor): previous decoder outputs of shape
-#                 `(batch, tgt_len)`, for teacher forcing
-#             encoder_out (EncoderOut, optional): output from the encoder, used
-#                 for encoder-side attention
-#             incremental_state (dict, optional): dictionary used for storing
-#                 state during :ref:`Incremental decoding`
-#             features_only (bool, optional): only return features without
-#                 applying output layer (default: False)
-#             alignment_layer (int, optional): 0-based index of the layer to be
-#                 used for pointing (default: 0)
-#             alignment_heads (int, optional): number of attention heads to be
-#                 used for pointing (default: 1)
-#         Returns:
-#             tuple:
-#                 - the decoder's output of shape `(batch, tgt_len, vocab)`
-#                 - a dictionary with any model-specific outputs
-#         """
-#         # The normal Transformer model doesn't pass the alignment_layer and
-#         # alignment_heads parameters correctly. We use our local variables.
-#         x, extra = self.extract_features(
-#             prev_output_tokens,
-#             encoder_out=encoder_out,
-#             incremental_state=incremental_state,
-#             alignment_layer=self.alignment_layer,
-#             alignment_heads=self.alignment_heads,
-#         )
-#         if not features_only:
-#             # Embedding the tokens again for generation probability prediction,
-#             # so that we don't have to reimplement the whole extract_features()
-#             # method.
-#             if incremental_state is not None:
-#                 prev_output_tokens = prev_output_tokens[:, -1:]
-#             prev_output_embed = self.embed_tokens(prev_output_tokens)
-#             prev_output_embed *= self.embed_scale
-#             predictors = torch.cat((prev_output_embed, x), 2)
-#             p_gens = self.project_p_gens(predictors)
-#             p_gens = torch.sigmoid(p_gens)
-#             x = self.output_layer(x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
-#         return x, extra
-
-#     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
-#         """
-#         Project features to the vocabulary size and mix with the attention
-#         distributions.
-#         """
-#         if self.force_p_gen is not None:
-#             p_gens = self.force_p_gen
-
-#         # project back to size of vocabulary
-#         logits = super().output_layer(features, **kwargs)
-
-#         batch_size = logits.shape[0]
-#         output_length = logits.shape[1]
-#         assert logits.shape[2] == self.num_embeddings
-#         assert src_tokens.shape[0] == batch_size
-#         src_length = src_tokens.shape[1]
-
-#         # The final output distribution will be a mixture of the normal output
-#         # distribution (softmax of logits) and attention weights.
-#         gen_dists = super().get_normalized_probs(
-#             (logits, None), log_probs=False, sample=None
-#         )
-#         gen_dists = torch.mul(gen_dists, p_gens)
-#         padding_size = (batch_size, output_length, self.num_oov_types)
-#         padding = gen_dists.new_zeros(padding_size)
-#         gen_dists = torch.cat((gen_dists, padding), 2)
-#         assert gen_dists.shape[2] == self.num_types
-
-#         # Scatter attention distributions to distributions over the extended
-#         # vocabulary in a tensor of shape [batch_size, output_length,
-#         # vocab_size]. Each attention weight will be written into a location
-#         # that is for other dimensions the same as in the index tensor, but for
-#         # the third dimension it's the value of the index tensor (the token ID).
-#         attn = torch.mul(attn, 1 - p_gens)
-#         index = src_tokens[:, None, :]
-#         index = index.expand(batch_size, output_length, src_length)
-#         attn_dists_size = (batch_size, output_length, self.num_types)
-#         attn_dists = attn.new_zeros(attn_dists_size)
-#         attn_dists.scatter_add_(2, index, attn)
-
-#         # Final distributions, [batch_size, output_length, num_types].
-#         return gen_dists + attn_dists
-
-#     def get_normalized_probs(self, net_output, log_probs, sample):
-#         """
-#         Get normalized probabilities (or log probs) from a net's output.
-#         Pointer-generator network output is already normalized.
-#         """
-#         probs = net_output[0]
-#         # Make sure the probabilities are greater than zero when returning log
-#         # probabilities.
-#         return probs.clamp(1e-10, 1.0).log() if log_probs else probs
-
 
 class PALMDecoder(TransformerDecoder):
     """
@@ -1258,3 +1114,147 @@ def mpalm_base_architecture(args):
 def mpalm_base_wmt20_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     mpalm_base_architecture(args)
+
+
+# class TransformerPointerGeneratorDecoder(TransformerDecoder):
+#     """
+#     Transformer decoder consisting of *args.decoder_layers* layers. Each layer
+#     is a :class:`TransformerDecoderLayer`. The pointer-generator variant mixes
+#     the output probabilities with an attention distribution in the output layer.
+#     Args:
+#         args (argparse.Namespace): parsed command-line arguments
+#         dictionary (~fairseq.data.Dictionary): decoding dictionary
+#         embed_tokens (torch.nn.Embedding): output embedding
+#     """
+
+#     def __init__(self, args, dictionary, embed_tokens):
+#         super().__init__(args, dictionary, embed_tokens, no_encoder_attn=False)
+
+#         # In the pointer-generator model these arguments define the decoder
+#         # layer and the number of attention heads that will be averaged to
+#         # create the alignment for pointing.
+#         self.alignment_heads = args.alignment_heads
+#         self.alignment_layer = args.alignment_layer
+
+#         input_embed_dim = embed_tokens.embedding_dim
+
+#         # Generation probabilities / interpolation coefficients are predicted
+#         # from the current decoder input embedding and the decoder output, which
+#         # is the size of output_embed_dim.
+#         p_gen_input_size = input_embed_dim + self.output_embed_dim
+#         self.project_p_gens = nn.Linear(p_gen_input_size, 1)
+#         nn.init.zeros_(self.project_p_gens.bias)
+
+#         # The dictionary may include a separate entry for an OOV token in each
+#         # input position, so that their identity can be restored from the
+#         # original source text.
+#         self.num_types = len(dictionary)
+#         self.num_oov_types = args.source_position_markers
+#         self.num_embeddings = self.num_types - self.num_oov_types
+#         self.force_p_gen = args.force_generation
+
+#     def forward(
+#         self,
+#         prev_output_tokens,
+#         encoder_out: Optional[EncoderOut] = None,
+#         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
+#         features_only: bool = False,
+#         alignment_layer: Optional[int] = 0,
+#         alignment_heads: Optional[int] = 1,
+#         src_lengths: Optional[Any] = None,
+#         return_all_hiddens: bool = False,
+#     ):
+#         """
+#         Args:
+#             prev_output_tokens (LongTensor): previous decoder outputs of shape
+#                 `(batch, tgt_len)`, for teacher forcing
+#             encoder_out (EncoderOut, optional): output from the encoder, used
+#                 for encoder-side attention
+#             incremental_state (dict, optional): dictionary used for storing
+#                 state during :ref:`Incremental decoding`
+#             features_only (bool, optional): only return features without
+#                 applying output layer (default: False)
+#             alignment_layer (int, optional): 0-based index of the layer to be
+#                 used for pointing (default: 0)
+#             alignment_heads (int, optional): number of attention heads to be
+#                 used for pointing (default: 1)
+#         Returns:
+#             tuple:
+#                 - the decoder's output of shape `(batch, tgt_len, vocab)`
+#                 - a dictionary with any model-specific outputs
+#         """
+#         # The normal Transformer model doesn't pass the alignment_layer and
+#         # alignment_heads parameters correctly. We use our local variables.
+#         x, extra = self.extract_features(
+#             prev_output_tokens,
+#             encoder_out=encoder_out,
+#             incremental_state=incremental_state,
+#             alignment_layer=self.alignment_layer,
+#             alignment_heads=self.alignment_heads,
+#         )
+#         if not features_only:
+#             # Embedding the tokens again for generation probability prediction,
+#             # so that we don't have to reimplement the whole extract_features()
+#             # method.
+#             if incremental_state is not None:
+#                 prev_output_tokens = prev_output_tokens[:, -1:]
+#             prev_output_embed = self.embed_tokens(prev_output_tokens)
+#             prev_output_embed *= self.embed_scale
+#             predictors = torch.cat((prev_output_embed, x), 2)
+#             p_gens = self.project_p_gens(predictors)
+#             p_gens = torch.sigmoid(p_gens)
+#             x = self.output_layer(x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
+#         return x, extra
+
+#     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
+#         """
+#         Project features to the vocabulary size and mix with the attention
+#         distributions.
+#         """
+#         if self.force_p_gen is not None:
+#             p_gens = self.force_p_gen
+
+#         # project back to size of vocabulary
+#         logits = super().output_layer(features, **kwargs)
+
+#         batch_size = logits.shape[0]
+#         output_length = logits.shape[1]
+#         assert logits.shape[2] == self.num_embeddings
+#         assert src_tokens.shape[0] == batch_size
+#         src_length = src_tokens.shape[1]
+
+#         # The final output distribution will be a mixture of the normal output
+#         # distribution (softmax of logits) and attention weights.
+#         gen_dists = super().get_normalized_probs(
+#             (logits, None), log_probs=False, sample=None
+#         )
+#         gen_dists = torch.mul(gen_dists, p_gens)
+#         padding_size = (batch_size, output_length, self.num_oov_types)
+#         padding = gen_dists.new_zeros(padding_size)
+#         gen_dists = torch.cat((gen_dists, padding), 2)
+#         assert gen_dists.shape[2] == self.num_types
+
+#         # Scatter attention distributions to distributions over the extended
+#         # vocabulary in a tensor of shape [batch_size, output_length,
+#         # vocab_size]. Each attention weight will be written into a location
+#         # that is for other dimensions the same as in the index tensor, but for
+#         # the third dimension it's the value of the index tensor (the token ID).
+#         attn = torch.mul(attn, 1 - p_gens)
+#         index = src_tokens[:, None, :]
+#         index = index.expand(batch_size, output_length, src_length)
+#         attn_dists_size = (batch_size, output_length, self.num_types)
+#         attn_dists = attn.new_zeros(attn_dists_size)
+#         attn_dists.scatter_add_(2, index, attn)
+
+#         # Final distributions, [batch_size, output_length, num_types].
+#         return gen_dists + attn_dists
+
+#     def get_normalized_probs(self, net_output, log_probs, sample):
+#         """
+#         Get normalized probabilities (or log probs) from a net's output.
+#         Pointer-generator network output is already normalized.
+#         """
+#         probs = net_output[0]
+#         # Make sure the probabilities are greater than zero when returning log
+#         # probabilities.
+#         return probs.clamp(1e-10, 1.0).log() if log_probs else probs

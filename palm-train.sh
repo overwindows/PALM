@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=1 fairseq-train \
+CUDA_VISIBLE_DEVICES=3 fairseq-train \
 /datadrive/cnn_dm-bin \
 --user-dir src \
 --log-interval 100 \

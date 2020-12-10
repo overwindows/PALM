@@ -15,7 +15,6 @@ from fairseq.data import (
     MaskTokensDataset,
     AppendTokenDataset,
     ConcatDataset,
-    # LanguagePairDataset,
     PrependTokenDataset,
     StripTokenDataset,
     TruncateDataset,
@@ -24,8 +23,8 @@ from fairseq.data import (
     indexed_dataset,
 )
 from fairseq.tasks import register_task, LegacyFairseqTask
-# from fairseq.tasks.translation import TranslationTask
 
+# data set for both masked LM and generator.
 from src.data.masked_pair_dataset import LanguagePairDataset
 
 EVAL_BLEU_ORDER = 4
@@ -54,8 +53,8 @@ def load_langpair_dataset(
     num_buckets=0,
     shuffle=True,
     pad_to_multiple=1,
-
-    mask_idx=0,
+    # Masked LM parameters.
+    mask_idx: int = 0,
     seed: int = 1,
     mask_prob: float = 0.15,
     leave_unmasked_prob: float = 0.1,
@@ -162,20 +161,21 @@ def load_langpair_dataset(
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
+    # mask source dataset.
     src_dataset, masked_src_dataset = MaskTokensDataset.apply_mask(
-            src_dataset,
-            src_dict,
-            pad_idx=src_dict.pad(),
-            mask_idx=mask_idx,
-            seed=seed,
-            mask_prob=mask_prob,
-            leave_unmasked_prob=leave_unmasked_prob,
-            random_token_prob=random_token_prob,
-            freq_weighted_replacement=freq_weighted_replacement,
-            mask_whole_words=mask_whole_words,
-            mask_multiple_length=mask_multiple_length,
-            mask_stdev=mask_stdev,
-        )
+        src_dataset,
+        src_dict,
+        pad_idx=src_dict.pad(),
+        mask_idx=mask_idx,
+        seed=seed,
+        mask_prob=mask_prob,
+        leave_unmasked_prob=leave_unmasked_prob,
+        random_token_prob=random_token_prob,
+        freq_weighted_replacement=freq_weighted_replacement,
+        mask_whole_words=mask_whole_words,
+        mask_multiple_length=mask_multiple_length,
+        mask_stdev=mask_stdev,
+    )
 
     return LanguagePairDataset(
         src_dataset,
@@ -184,7 +184,10 @@ def load_langpair_dataset(
         tgt_dataset,
         tgt_dataset_sizes,
         tgt_dict,
+        # for Mask LM loss calculation.
         masked_src_dataset,
+        masked_src_dataset.sizes,
+        
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset,
@@ -198,7 +201,7 @@ def load_langpair_dataset(
 @register_task("auto_encoding_regressive")
 class AutoEncodeingRegressiveTask(LegacyFairseqTask):
     """
-    Translate from one (source) language to another (target) language.
+    Autoencoding (source) & Autoregressive (target) Language Model for Context-conditioned Generation.
 
     Args:
         src_dict (~fairseq.data.Dictionary): dictionary for the source language
@@ -206,7 +209,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
 
     .. note::
 
-        The translation task is compatible with :mod:`fairseq-train`,
+        The task is compatible with :mod:`fairseq-train`,
         :mod:`fairseq-generate` and :mod:`fairseq-interactive`.
 
     The translation task provides the following additional command-line
@@ -275,21 +278,21 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
             help="max number of total tokens over all segments "
             "per sample for BERT dataset",
         )
-        parser.add_argument(
-            "--sent-loss",
-            action="store_true",
-            help="if set," " calculate sentence level predictions",
-        )
+        # parser.add_argument(
+        #     "--sent-loss",
+        #     action="store_true",
+        #     help="if set," " calculate sentence level predictions",
+        # )
         # parser.add_argument(
         #     "--max-positions", type=int, help="number of positional embeddings to learn"
         # )
         # Arguments related to sentence level prediction
-        parser.add_argument(
-            "--sentence-class-num",
-            type=int,
-            metavar="N",
-            help="number of classes for sentence task",
-        )
+        # parser.add_argument(
+        #     "--sentence-class-num",
+        #     type=int,
+        #     metavar="N",
+        #     help="number of classes for sentence task",
+        # )
         parser.add_argument(
             "--share-encoder-input-output-embed",
             action="store_true",
@@ -301,6 +304,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
             metavar="D",
             help="dropout probability after" " activation in FFN",
         )
+        # should be 1.
         parser.add_argument(
             "--num-segment", type=int, metavar="N", help="num segment in the input"
         )
@@ -317,9 +321,8 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
 
-        # add mask token
+        # Add mask token for both souce dict and target dict.
         self.mask_idx = src_dict.add_symbol("<mask>")
-        
         tgt_dict.add_symbol('<mask>')
 
     @classmethod
@@ -396,7 +399,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
             num_buckets=self.args.num_batch_buckets,
             shuffle=(split != "test"),
             pad_to_multiple=self.args.required_seq_len_multiple,
-            mask_idx = self.mask_idx,
+            mask_idx=self.mask_idx,
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, constraints=None):

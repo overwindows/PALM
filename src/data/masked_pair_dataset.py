@@ -252,7 +252,7 @@ class LanguagePairDataset(FairseqDataset):
             ), "Source and target must contain the same number of examples"
         self.src = src
         self.tgt = tgt
-        self.masked_src = src
+        self.masked_src = masked_src
 
         self.src_sizes = np.array(src_sizes)
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
