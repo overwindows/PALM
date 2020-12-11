@@ -372,7 +372,7 @@ class PALMEncoder(FairseqEncoder):
             attention_dropout=args.attention_dropout,
             activation_dropout=args.act_dropout,
             max_seq_len=self.max_source_positions,
-            num_segments=args.num_segment,
+            # num_segments=args.num_segment,
             use_position_embeddings=not args.no_token_positional_embeddings,
             encoder_normalize_before=args.encoder_normalize_before,
             apply_bert_init=args.apply_bert_init,

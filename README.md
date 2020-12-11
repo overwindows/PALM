@@ -9,7 +9,7 @@ wget https://raw.githubusercontent.com/artmatsak/cnn-dailymail/master/url_lists/
 -->
 ## Make datafiles
 ```
-python3 -m make_datafiles /datadrive/cnn/stories /datadrive/dailymail/stories
+python -m make_datafiles /datadrive/cnn/stories /datadrive/dailymail/stories
 ```
 ## BPE preprocess
 ```
