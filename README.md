@@ -1,5 +1,7 @@
 # PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation (EMNLP 2020)
-
+## CNN-DM Data
+- [CNN Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfTHk4NFg2SndKcjQ)
+- [DailyMail Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfM1BxdkxVaTY2bWs)
 <!--## Url lists
 ```
 wget https://raw.githubusercontent.com/artmatsak/cnn-dailymail/master/url_lists/all_train.txt
@@ -29,3 +31,6 @@ sh preprocess.sh
 ```
 sh palm-train.sh
 ```
+
+## Reference
+- [CNN-DM Data](https://github.com/abisee/cnn-dailymail)

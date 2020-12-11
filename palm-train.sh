@@ -1,5 +1,6 @@
-CUDA_VISIBLE_DEVICES=1 fairseq-train \
-/datadrive/cnn_dm-bin \
+DATA_BIN=/datadrive/cnn_dm-bin
+
+CUDA_VISIBLE_DEVICES=1 fairseq-train $DATA_BIN \
 --user-dir src \
 --log-interval 100 \
 --log-format json \
