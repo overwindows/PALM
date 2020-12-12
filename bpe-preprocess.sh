@@ -1,5 +1,5 @@
 TASK=cnn_dm
-for SPLIT in train val
+for SPLIT in train val test
 do
   for LANG in source target
   do

@@ -1,16 +1,24 @@
-CUDA_VISIBLE_DEVICES=3 fairseq-train \
-    /datadrive/cnn_dm-bin \
+CUDA_VISIBLE_DEVICES=0 fairseq-train /datadrive/cnn_dm_bin \
     --arch transformer --share-decoder-input-output-embed \
-    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \
-    --lr 5e-4 --lr-scheduler inverse_sqrt --warmup-updates 4000 \
-    --dropout 0.3 --weight-decay 0.0001 \
+    --task translation \
+    --source-lang source --target-lang target \
+    --truncate-source \
+    --layernorm-embedding \
+    --share-all-embeddings \
+    --reset-optimizer --reset-dataloader --reset-meters \
+    --required-batch-size-multiple 1 \
+    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
+    --lr 3e-05 --lr-scheduler polynomial_decay --warmup-updates 400 --total-num-update 20000 \
+    --dropout 0.1 --attention-dropout 0.1 --weight-decay 0.0001 \
     --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \
-    --max-tokens 4096 --skip-invalid-size-inputs-valid-test \
+    --max-tokens 2048 --skip-invalid-size-inputs-valid-test \
+    --fp16 --update-freq 4 \
+    --find-unused-parameters \
     --eval-bleu \
     --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
     --eval-bleu-detok moses \
     --eval-bleu-remove-bpe \
     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
     --eval-bleu-print-samples \
-    --save-dir /datadrive/palm_checkpoints \
-    --tensorboard-logdir /datadrive/palm_logdir
+    --save-dir /bigdata/baseline_checkpoints
+    # --tensorboard-logdir /datadrive/palm_logdir
