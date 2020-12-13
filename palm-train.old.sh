@@ -1,9 +1,7 @@
-DATA_BIN=/datadrive/cnn_dm-bin
+DATA_BIN=/datadrive/cnn_dm_bin
 
-CUDA_VISIBLE_DEVICES=1 fairseq-train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=1 python -m train $DATA_BIN \
 --user-dir src \
---log-interval 100 \
---log-format json \
 --seed 1 \
 --min-loss-scale 0.0001 \
 --model-parallel-size 1 \
@@ -13,7 +11,7 @@ CUDA_VISIBLE_DEVICES=1 fairseq-train $DATA_BIN \
 --task auto_encoding_regressive \
 --num-workers 4 \
 --skip-invalid-size-inputs-valid-test \
---max-tokens 4096 \
+--max-tokens 2048 \
 --required-batch-size-multiple 1 \
 --train-subset train \
 --valid-subset valid \
@@ -76,5 +74,7 @@ CUDA_VISIBLE_DEVICES=1 fairseq-train $DATA_BIN \
 # --copy-attention-heads 1 \
 # --copy-attention-dropout 0.2 \
 # --tokens-per-sample 512 \
+# --log-interval 100 \
+# --log-format json \
 
 
