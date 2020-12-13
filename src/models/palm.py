@@ -77,7 +77,7 @@ class PALMModel(TransformerModel):
         palm_base_architecture(args)
         if not hasattr(args, "max_positions"):
             args.max_positions = args.tokens_per_sample
-        # print(args.max_positions)
+        # print('Model max positions: {}'.format(args.max_positions))
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
         if src_dict != tgt_dict:
             raise ValueError("PALM requires a joined dictionary")

@@ -115,7 +115,7 @@ def load_langpair_dataset(
 
         if not combine:
             break
-    logger.info('Length of Source DataSets: {}'.format(len(src_datasets)))
+    # logger.info('Length of Source DataSets: {}'.format(len(src_datasets)))
     assert len(src_datasets) == len(tgt_datasets) or len(tgt_datasets) == 0
 
     if len(src_datasets) == 1:
@@ -175,6 +175,7 @@ def load_langpair_dataset(
         mask_stdev=mask_stdev,
     )
 
+    # print(len(src_dataset.sizes), len(tgt_dataset_sizes), len(masked_src_dataset.sizes))
     return LanguagePairDataset(
         src_dataset,
         src_dataset.sizes,
@@ -271,7 +272,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         # fmt: on
         parser.add_argument(
             "--tokens-per-sample",
-            default=512,
+            default=1024,
             type=int,
             help="max number of total tokens over all segments "
             "per sample for BERT dataset",
@@ -306,7 +307,6 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         parser.add_argument(
             "--num-segment", type=int, metavar="N", help="num segment in the input"
         )
-
         # Arguments related to parameter initialization
         parser.add_argument(
             "--apply-bert-init",

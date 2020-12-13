@@ -2,21 +2,19 @@ DATA_BIN=/datadrive/cnn_dm_bin
 
 CUDA_VISIBLE_DEVICES=1 python -m train $DATA_BIN \
 --user-dir src \
---seed 1 \
 --min-loss-scale 0.0001 \
 --model-parallel-size 1 \
 --criterion label_smoothed_cross_entropy_with_masked_lm \
 --optimizer adam \
 --lr-scheduler polynomial_decay --total-num-update 100 \
 --task auto_encoding_regressive \
---num-workers 4 \
 --skip-invalid-size-inputs-valid-test \
 --max-tokens 2048 \
 --required-batch-size-multiple 1 \
 --train-subset train \
 --valid-subset valid \
 --validate-interval 1 \
---max-tokens-valid 4096 \
+--max-tokens-valid 2048 \
 --bucket-cap-mb 25 \
 --arch palm_base \
 --clip-norm 0.1 \
@@ -36,8 +34,6 @@ CUDA_VISIBLE_DEVICES=1 python -m train $DATA_BIN \
 --weight-decay 0.01 \
 --warmup-updates 15 \
 --power 1 \
---max-source-positions 1024 \
---max-target-positions 1024 \
 --dropout 0.1 \
 --attention-dropout 0.1 \
 --num-segment 1 \
@@ -76,5 +72,8 @@ CUDA_VISIBLE_DEVICES=1 python -m train $DATA_BIN \
 # --tokens-per-sample 512 \
 # --log-interval 100 \
 # --log-format json \
+# --max-source-positions 1024 \
+# --max-target-positions 1024 \
+# --num-workers 4 \
 
 
