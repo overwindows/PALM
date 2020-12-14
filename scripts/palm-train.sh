@@ -27,4 +27,4 @@ CUDA_VISIBLE_DEVICES=3 fairseq-train /datadrive/cnn_dm_bin \
     --find-unused-parameters --act-dropout 0.1 --save-dir /bigdata/palm_checkpoints --tensorboard-logdir /bigdata/logdir/palm
 
 
-    # --restore-file $BART_PATH \
+    # --restore-file $PALM_PATH \

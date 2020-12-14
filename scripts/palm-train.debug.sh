@@ -2,42 +2,27 @@ DATA_BIN=/datadrive/cnn_dm_bin
 
 CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --user-dir src \
---min-loss-scale 0.0001 \
---model-parallel-size 1 \
---criterion label_smoothed_cross_entropy_with_masked_lm \
---optimizer adam \
---lr-scheduler polynomial_decay --total-num-update 100 \
---task auto_encoding_regressive \
+--task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm \
+--share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \
+--optimizer adam --adam-betas "(0.9, 0.98)" --adam-eps 1e-08 \
+--lr 3e-05 --lr-scheduler polynomial_decay --total-num-update 10000 --warmup-updates 1500 \
 --skip-invalid-size-inputs-valid-test \
 --max-tokens 2048 \
---required-batch-size-multiple 1 \
 --train-subset train \
 --valid-subset valid \
 --validate-interval 1 \
 --max-tokens-valid 2048 \
---bucket-cap-mb 25 \
---arch palm_base \
 --clip-norm 0.1 \
---update-freq [2] \
---lr [0.0006] \
---min-lr -1 \
 --save-dir /bigdata/debug_checkpoints --tensorboard-logdir /bigdata/logdir/debug \
---optimizer-overrides {} \
 --keep-interval-updates -1 \
 --keep-last-epochs -1 \
 --keep-best-checkpoints -1 \
 --no-epoch-checkpoints \
 --best-checkpoint-metric loss \
---patience -1 \
---adam-betas "(0.9, 0.98)" \
---adam-eps 1e-06 \
 --weight-decay 0.01 \
---warmup-updates 15 \
---power 1 \
 --dropout 0.1 \
 --attention-dropout 0.1 \
---num-segment 1 \
---pooler-activation-fn tanh --act-dropout 0.1
+--act-dropout 0.1 --reset-optimizer
 
 # --sample-break-mode complete_doc \
 # --mask 0.3 \
@@ -47,13 +32,10 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 # --mask-length span-poisson \
 # --replace-length 1 \
 # --cpu \
-# --tensorboard-logdir /datadrive/pretrain/tests/fairseq/palm_en_small/logs \
+# --fp16 \
 # --max-update 100 \
 # --restore-file checkpoint_last.pt \
 # --save-interval 1 --save-interval-updates 50 \
-# --share-all-embeddings \
-# --layernorm-embedding \
-# --share-decoder-input-output-embed \
 # --encoder-embed-dim 768 \
 # --encoder-ffn-embed-dim 3072 \
 # --encoder-layers 6 \
@@ -75,5 +57,15 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 # --max-source-positions 1024 \
 # --max-target-positions 1024 \
 # --num-workers 4 \
-
+# --model-parallel-size 1 \
+# --update-freq 4 \
+# --num-segment 1 \
+# --min-lr -1 \
+# --optimizer-overrides {} \
+# --min-loss-scale 0.0001 \
+# --power 1 \
+# --bucket-cap-mb 25 \
+# --patience -1 \
+# --required-batch-size-multiple 1 \
+# --pooler-activation-fn tanh
 
