@@ -11,7 +11,7 @@ wget https://raw.githubusercontent.com/artmatsak/cnn-dailymail/master/url_lists/
 -->
 ## Make datafiles
 ```
-python -m make_datafiles /datadrive/cnn/stories /datadrive/dailymail/stories
+python -m utils.make_datafiles /datadrive/cnn/stories /datadrive/dailymail/stories
 ```
 ## BPE preprocess
 ```
@@ -19,17 +19,17 @@ wget -N 'https://dl.fbaipublicfiles.com/fairseq/gpt2_bpe/encoder.json'
 wget -N 'https://dl.fbaipublicfiles.com/fairseq/gpt2_bpe/vocab.bpe'
 wget -N 'https://dl.fbaipublicfiles.com/fairseq/gpt2_bpe/dict.txt'
 
-sh bpe_preprocess.sh
+sh scripts/bpe_preprocess.sh
 ```
 
 ## Binarize dataset
 ```
-sh preprocess.sh
+sh scripts/preprocess.sh
 ```
 
 ## Model Training
 ```
-sh palm-train.sh
+sh scripts/palm-train.sh
 ```
 
 ## Reference

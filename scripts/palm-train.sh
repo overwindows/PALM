@@ -4,7 +4,7 @@ LR=3e-05
 MAX_TOKENS=2048
 UPDATE_FREQ=4
 
-CUDA_VISIBLE_DEVICES=2 fairseq-train /datadrive/cnn_dm_bin \
+CUDA_VISIBLE_DEVICES=3 fairseq-train /datadrive/cnn_dm_bin \
     --user-dir src \
     --max-tokens $MAX_TOKENS \
     --task auto_encoding_regressive \
@@ -24,7 +24,7 @@ CUDA_VISIBLE_DEVICES=2 fairseq-train /datadrive/cnn_dm_bin \
     --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
     --fp16 --update-freq $UPDATE_FREQ \
     --skip-invalid-size-inputs-valid-test \
-    --find-unused-parameters --act-dropout 0.1 --save-dir /bigdata/palm_checkpoints
+    --find-unused-parameters --act-dropout 0.1 --save-dir /bigdata/palm_checkpoints --tensorboard-logdir /bigdata/logdir/palm
 
 
     # --restore-file $BART_PATH \

@@ -20,5 +20,4 @@ CUDA_VISIBLE_DEVICES=0 fairseq-train /datadrive/cnn_dm_bin \
     --eval-bleu-remove-bpe \
     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
     --eval-bleu-print-samples \
-    --save-dir /bigdata/baseline_checkpoints
-    # --tensorboard-logdir /datadrive/palm_logdir
+    --save-dir /bigdata/baseline_checkpoints --tensorboard-logdir /bigdata/logdir/baseline

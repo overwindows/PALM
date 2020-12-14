@@ -1,6 +1,6 @@
 DATA_BIN=/datadrive/cnn_dm_bin
 
-CUDA_VISIBLE_DEVICES=1 python -m train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --user-dir src \
 --min-loss-scale 0.0001 \
 --model-parallel-size 1 \
@@ -21,7 +21,7 @@ CUDA_VISIBLE_DEVICES=1 python -m train $DATA_BIN \
 --update-freq [2] \
 --lr [0.0006] \
 --min-lr -1 \
---save-dir /datadrive/pretrain/fairseq/palm_en_small/logs \
+--save-dir /bigdata/debug_checkpoints --tensorboard-logdir /bigdata/logdir/debug \
 --optimizer-overrides {} \
 --keep-interval-updates -1 \
 --keep-last-epochs -1 \

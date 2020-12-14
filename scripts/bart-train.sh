@@ -24,7 +24,7 @@ CUDA_VISIBLE_DEVICES=1 fairseq-train /datadrive/cnn_dm_bin \
     --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
     --fp16 --update-freq $UPDATE_FREQ \
     --skip-invalid-size-inputs-valid-test \
-    --find-unused-parameters --save-dir /bigdata/bart_checkpoints
+    --find-unused-parameters --save-dir /bigdata/bart_checkpoints --tensorboard-logdir /bigdata/logdir/bart
 
 
     # --restore-file $BART_PATH \
