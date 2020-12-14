@@ -25,6 +25,7 @@ from fairseq.modules import (
     LayerNorm,
     TransformerDecoderLayer,
     TransformerSentenceEncoder,
+    SinusoidalPositionalEmbedding,
 )
 from fairseq.models.fairseq_incremental_decoder import FairseqIncrementalDecoder
 
@@ -285,14 +286,14 @@ class PALMModel(TransformerModel):
 
         # When finetuning on translation task, remove last row of
         # embedding matrix that corresponds to mask_idx token.
-        loaded_dict_size = state_dict["encoder.embed_tokens.weight"].size(0)
+        loaded_dict_size = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(0)
         if (
             loaded_dict_size == len(self.encoder.dictionary) + 1
             and "<mask>" not in self.encoder.dictionary
         ):
-            truncate_emb("encoder.embed_tokens.weight")
+            truncate_emb("encoder.sentence_encoder.embed_tokens.weight")
             truncate_emb("decoder.embed_tokens.weight")
-            truncate_emb("encoder.output_projection.weight")
+            truncate_emb("encoder.sentence_encoder.output_projection.weight")
             truncate_emb("decoder.output_projection.weight")
 
         # When continued pretraining on new set of languages for mbart,
@@ -305,24 +306,24 @@ class PALMModel(TransformerModel):
                 "Adding extra language embeddings not found in pretrained model for "
                 "continued pretraining of MBART on new set of languages."
             )
-            loaded_mask_token_embedding = state_dict["encoder.embed_tokens.weight"][
+            loaded_mask_token_embedding = state_dict["encoder.sentence_encoder.embed_tokens.weight"][
                 -1, :
             ]
 
             num_langids_to_add = len(
                 self.encoder.dictionary) - loaded_dict_size
-            embed_dim = state_dict["encoder.embed_tokens.weight"].size(1)
+            embed_dim = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(1)
 
             new_lang_embed_to_add = torch.zeros(num_langids_to_add, embed_dim)
             nn.init.normal_(new_lang_embed_to_add,
                             mean=0, std=embed_dim ** -0.5)
             new_lang_embed_to_add = new_lang_embed_to_add.to(
-                dtype=state_dict["encoder.embed_tokens.weight"].dtype,
+                dtype=state_dict["encoder.sentence_encoder.embed_tokens.weight"].dtype,
             )
 
-            state_dict["encoder.embed_tokens.weight"] = torch.cat(
+            state_dict["encoder.sentence_encoder.embed_tokens.weight"] = torch.cat(
                 [
-                    state_dict["encoder.embed_tokens.weight"][
+                    state_dict["encoder.sentence_encoder.embed_tokens.weight"][
                         : loaded_dict_size - 1, :
                     ],
                     new_lang_embed_to_add,
