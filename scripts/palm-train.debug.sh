@@ -2,7 +2,7 @@ DATA_BIN=/datadrive/cnn_dm_bin
 
 CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --user-dir src \
---task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm \
+--task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
 --share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \
 --optimizer adam --adam-betas "(0.9, 0.98)" --adam-eps 1e-08 \
 --lr 3e-05 --lr-scheduler polynomial_decay --total-num-update 10000 --warmup-updates 1500 \
