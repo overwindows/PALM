@@ -1,6 +1,6 @@
 # Introduction
 Source code for the paper: **PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation** (Accepted by EMNLP 2020)
-![](./arch.png){:height="50%" width="50%"}
+<img src="arch.png" style="zoom:50%" />
 
 # Dependecies
 - FairSeq version >= 1.0.0
