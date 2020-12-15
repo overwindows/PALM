@@ -160,12 +160,12 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         metrics.log_scalar(
             "masked_loss", masked_loss_sum / masked_sample_size / math.log(2), masked_sample_size, round=3
         )
-        metrics.log_scalar(
-            "alignment_loss",
-            alignment_loss_sum / sample_size / math.log(2),
-            sample_size,
-            round=3,
-        )
+        # metrics.log_scalar(
+        #     "alignment_loss",
+        #     alignment_loss_sum / sample_size / math.log(2),
+        #     sample_size,
+        #     round=3,
+        # )
         metrics.log_derived(
             "ppl", lambda meters: utils.get_perplexity(meters["nll_loss"].avg)
         )

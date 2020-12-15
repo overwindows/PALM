@@ -1,5 +1,14 @@
-# PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation (EMNLP 2020)
-## CNN-DM Data
+# Introduction
+Source code for the paper: **PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation** (Accepted by EMNLP 2020)
+![](./arch.jpg)
+
+# Dependecies
+- FairSeq version >= 1.0.0
+- PyTorch version >= 1.0.0
+- Python version >= 3.6
+
+# Downloads
+## Download [CNN-DM Data](https://github.com/abisee/cnn-dailymail)
 - [CNN Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfTHk4NFg2SndKcjQ)
 - [DailyMail Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfM1BxdkxVaTY2bWs)
 <!--## Url lists
@@ -27,10 +36,23 @@ sh scripts/bpe_preprocess.sh
 sh scripts/preprocess.sh
 ```
 
-## Model Training
+# Train without the pre-trained model
 ```
 sh scripts/palm-train.sh
 ```
+<!--# Evaluate on the CNN-DM test dataset-->
+<!--# Get pre-trained models from scrach-->
 
-## Reference
-- [CNN-DM Data](https://github.com/abisee/cnn-dailymail)
+# Acknowledgments
+We extended [Fairseq](https://github.com/pytorch/fairseq) to support PALM by adding *Auto_Encoding_Regressive* task, *PALM* model and *Label_Smoothed_Cross_Entropy_with_Masked_LM* criterion.
+
+# Citation
+Please cite as:
+```
+@article{bi2020palm,
+  title={PALM: Pre-training an Autoencoding\&Autoregressive Language Model for Context-conditioned Generation},
+  author={Bi, Bin and Li, Chenliang and Wu, Chen and Yan, Ming and Wang, Wei},
+  journal={arXiv preprint arXiv:2004.07159},
+  year={2020}
+}
+```
