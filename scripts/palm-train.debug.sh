@@ -1,6 +1,6 @@
 DATA_BIN=/datadrive/cnn_dm_bin
 
-CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=3 python -m utils.train $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
 --task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
 --share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \
@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --max-tokens 2048 --required-batch-size-multiple 1 \
 --update-freq 4 --fp16 \
 --train-subset train \
---valid-subset valid \
+--valid-subset valid --eval-bleu \
 --validate-interval 1 \
 --max-tokens-valid 2048 \
 --keep-interval-updates -1 \
@@ -20,7 +20,7 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --no-epoch-checkpoints \
 --best-checkpoint-metric loss \
 --save-dir /bigdata/debug_checkpoints \
---reset-optimizer --tensorboard-logdir /bigdata/logdir/debug
+--reset-optimizer --reset-meters --tensorboard-logdir /bigdata/logdir/debug
 
 # --sample-break-mode complete_doc \
 # --mask 0.3 \

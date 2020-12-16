@@ -1,5 +1,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+
 """
 PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation
 """
@@ -25,7 +26,7 @@ from fairseq.modules import (
     TransformerSentenceEncoder,
     SinusoidalPositionalEmbedding,
 )
-from fairseq.models.fairseq_incremental_decoder import FairseqIncrementalDecoder
+# from fairseq.models.fairseq_incremental_decoder import FairseqIncrementalDecoder
 
 from torch import Tensor
 from .hub_interface import PALMHubInterface
@@ -58,16 +59,14 @@ class PALMModel(TransformerModel):
         if hasattr(self.encoder, "dictionary"):
             self.eos: int = self.encoder.dictionary.eos()
 
-        self.copy_attention = args.copy_attention
-        if self.copy_attention:
-            self.copy_attn_layer = MultiheadAttention(
-                args.decoder_embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout, encoder_decoder_attention=True)
-            self.copy_alpha_linear = nn.Linear(args.decoder_embed_dim, 1)
+        # self.copy_attention = args.copy_attention
+        # if self.copy_attention:
+        #     self.copy_attn_layer = MultiheadAttention(
+        #         args.decoder_embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout, encoder_decoder_attention=True)
+        #     self.copy_alpha_linear = nn.Linear(args.decoder_embed_dim, 1)
 
     def get_masked_targets(self, sample):
         """Get targets from either the sample or the net's output."""
-        # print(sample.keys())
-        # print(sample['masked_source'].size())
         return sample["masked_source"]
 
     @classmethod
@@ -82,17 +81,15 @@ class PALMModel(TransformerModel):
             raise ValueError("PALM requires a joined dictionary")
 
         transformer_model = TransformerModel.build_model(args, task)
-
         encoder = PALMEncoder(args, src_dict)
-        # encoder = transformer_model.encoder
         decoder = PALMDecoder(
             args, tgt_dict, transformer_model.decoder.embed_tokens)
-        # decoder = transformer_model.decoder
         return PALMModel(args, encoder, decoder)
 
     @staticmethod
     def add_args(parser):
         super(PALMModel, PALMModel).add_args(parser)
+
         parser.add_argument(
             "--pooler-dropout",
             type=float,
@@ -116,6 +113,16 @@ class PALMModel(TransformerModel):
                             help='num copy layer attention heads')
         parser.add_argument('--copy-attention-dropout', type=float, metavar='D', default=0.,
                             help='num copy layer attention dropout')
+        parser.add_argument('--alignment-heads', type=int, metavar='N',
+                            help='number of attention heads to be used for '
+                                 'pointing')
+        parser.add_argument('--alignment-layer', type=int, metavar='I',
+                            help='layer number to be used for pointing (0 '
+                                 'corresponding to the bottommost layer)')
+        parser.add_argument('--source-position-markers', type=int, metavar='N',
+                            help='dictionary includes N additional items that '
+                                 'represent an OOV token at a particular input '
+                                 'position')
         parser.add_argument('--force-generation', type=float, metavar='P',
                             default=None,
                             help='set the vocabulary distribution weight to P, '
@@ -144,17 +151,10 @@ class PALMModel(TransformerModel):
             features_only = True
 
         # PALM Encoder
-        x, encoder_out = self.encoder(
+        # print(src_tokens.size())
+        encoder_out = self.encoder(
             src_tokens, segment_label, masked_tokens
         )
-
-        # Transformer Encoder
-        # encoder_out = self.encoder(
-        #     src_tokens,
-        #     src_lengths=src_lengths,
-        #     token_embeddings=token_embeddings,
-        #     return_all_hiddens=return_all_hiddens
-        # )
 
         x, extra = self.decoder(
             prev_output_tokens,
@@ -284,7 +284,8 @@ class PALMModel(TransformerModel):
 
         # When finetuning on translation task, remove last row of
         # embedding matrix that corresponds to mask_idx token.
-        loaded_dict_size = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(0)
+        loaded_dict_size = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(
+            0)
         if (
             loaded_dict_size == len(self.encoder.dictionary) + 1
             and "<mask>" not in self.encoder.dictionary
@@ -310,7 +311,8 @@ class PALMModel(TransformerModel):
 
             num_langids_to_add = len(
                 self.encoder.dictionary) - loaded_dict_size
-            embed_dim = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(1)
+            embed_dim = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(
+                1)
 
             new_lang_embed_to_add = torch.zeros(num_langids_to_add, embed_dim)
             nn.init.normal_(new_lang_embed_to_add,
@@ -356,7 +358,6 @@ class PALMEncoder(FairseqEncoder):
 
     def __init__(self, args, dictionary):
         super().__init__(dictionary)
-        # print(args.act_dropout)
         self.padding_idx = dictionary.pad()
         self.vocab_size = dictionary.__len__()
         self.max_source_positions = args.max_positions
@@ -439,12 +440,12 @@ class PALMEncoder(FairseqEncoder):
                   this is specified in the input arguments.
         """
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
-
+        # print(src_tokens.size())
         inner_states, sentence_rep = self.sentence_encoder(
             src_tokens,
             segment_labels=segment_labels,
         )
-
+        # print('last layer size: {}'.format(inner_states[-1].size()))
         x = inner_states[-1].transpose(0, 1)
 
         # Keep original tokens
@@ -473,8 +474,8 @@ class PALMEncoder(FairseqEncoder):
         sentence_logits = None
         # if self.sentence_projection_layer:
         #     sentence_logits = self.sentence_projection_layer(pooled_output)
-
-        return x, {
+        
+        return {
             "encoder_out": [encoder_out],
             "masked_out": x,
             "inner_states": inner_states,
@@ -482,6 +483,62 @@ class PALMEncoder(FairseqEncoder):
             # "sentence_logits": sentence_logits,
             "encoder_padding_mask": [encoder_padding_mask],
             "src_tokens": [src_tokens],  # B x T
+        }
+
+    def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
+        """
+        Reorder encoder output according to *new_order*.
+        Args:
+            encoder_out: output from the ``forward()`` method
+            new_order (LongTensor): desired order
+        Returns:
+            *encoder_out* rearranged according to *new_order*
+        """
+        # print(new_order)
+        if len(encoder_out["encoder_out"]) == 0:
+            new_encoder_out = []
+        else:
+            new_encoder_out = [encoder_out["encoder_out"]
+                               [0].index_select(0, new_order)]
+        if len(encoder_out["encoder_padding_mask"]) == 0:
+            new_encoder_padding_mask = []
+        else:
+            new_encoder_padding_mask = [
+                encoder_out["encoder_padding_mask"][0].index_select(
+                    0, new_order)
+            ]
+        # if len(encoder_out["encoder_embedding"]) == 0:
+        #     new_encoder_embedding = []
+        # else:
+        #     new_encoder_embedding = [
+        #         encoder_out["encoder_embedding"][0].index_select(0, new_order)
+        #     ]
+        if len(encoder_out["src_tokens"]) == 0:
+            src_tokens = []
+        else:
+            # print('src_tokens size before: {}'.format(encoder_out["src_tokens"][0].size()))
+            src_tokens = [(encoder_out["src_tokens"][0]
+                           ).index_select(0, new_order)]
+            # print('src_tokens size after: {}'.format(src_tokens[0].size()))
+        # if len(encoder_out["src_lengths"]) == 0:
+        #     src_lengths = []
+        # else:
+        #     src_lengths = [(encoder_out["src_lengths"][0]
+        #                     ).index_select(0, new_order)]
+
+        # encoder_states = encoder_out["encoder_states"]
+        # if len(encoder_states) > 0:
+        #     for idx, state in enumerate(encoder_states):
+        #         encoder_states[idx] = state.index_select(1, new_order)
+        
+        # print(new_encoder_out[0].size(),new_encoder_padding_mask[0].size(),src_tokens[0].size())
+        return {
+            "encoder_out": new_encoder_out,  # T x B x C
+            "encoder_padding_mask": new_encoder_padding_mask,  # B x T
+            # "encoder_embedding": new_encoder_embedding,  # B x T x C
+            # "encoder_states": encoder_states,  # List[T x B x C]
+            "src_tokens": src_tokens,  # B x T
+            # "src_lengths": src_lengths,  # B x 1
         }
 
     def max_positions(self):
@@ -521,6 +578,13 @@ class PALMDecoder(TransformerDecoder):
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         self.args = args
         super().__init__(args, dictionary, embed_tokens, no_encoder_attn=False)
+
+        # In the pointer-generator model these arguments define the decoder
+        # layer and the number of attention heads that will be averaged to
+        # create the alignment for pointing.
+        self.alignment_heads = args.alignment_heads
+        self.alignment_layer = args.alignment_layer
+
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
 
@@ -688,6 +752,8 @@ class PALMDecoder(TransformerDecoder):
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
                 - a dictionary with any model-specific outputs
         """
+        # print(prev_output_tokens.size())
+        # print(encoder_out['encoder_out'][0].size())
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -762,6 +828,7 @@ class PALMDecoder(TransformerDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
+        # print(prev_output_tokens.size(), encoder_out['encoder_out'][0].size()) 
         if alignment_layer is None:
             alignment_layer = self.num_layers - 1
 
@@ -806,12 +873,14 @@ class PALMDecoder(TransformerDecoder):
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
+
+        # print(x.size(), encoder_out['encoder_out'][0].size())
         for idx, layer in enumerate(self.layers):
             if incremental_state is None and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
-
+            assert encoder_out is not None and len(encoder_out["encoder_out"]) > 0
             x, layer_attn, _ = layer(
                 x,
                 encoder_out["encoder_out"][0]
@@ -867,14 +936,6 @@ class PALMDecoder(TransformerDecoder):
             x = self.project_out_dim(x)
 
         return x, {"attn": [attn], "inner_states": inner_states, "encoder_out": encoder_out}
-
-    # def output_layer(self, features):
-    #     """Project features to the vocabulary size."""
-    #     if self.adaptive_softmax is None:
-    #         # project back to size of vocabulary
-    #         return self.output_projection(features)
-    #     else:
-    #         return features
 
     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
         """
@@ -1082,6 +1143,11 @@ def palm_large_architecture(args):
     args.copy_attention_heads = getattr(args, 'copy_attention_heads', 1)
     args.copy_attention_dropout = getattr(args, 'copy_attention_dropout', 0.)
 
+    args.alignment_heads = getattr(args, "alignment_heads", 1)
+    args.alignment_layer = getattr(args, "alignment_layer", -1)
+    if args.alignment_layer < 0:
+        args.alignment_layer = args.decoder_layers + args.alignment_layer
+
 
 @register_model_architecture("palm", "palm_base")
 def palm_base_architecture(args):
@@ -1111,147 +1177,3 @@ def mpalm_base_architecture(args):
 def mpalm_base_wmt20_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     mpalm_base_architecture(args)
-
-
-# class TransformerPointerGeneratorDecoder(TransformerDecoder):
-#     """
-#     Transformer decoder consisting of *args.decoder_layers* layers. Each layer
-#     is a :class:`TransformerDecoderLayer`. The pointer-generator variant mixes
-#     the output probabilities with an attention distribution in the output layer.
-#     Args:
-#         args (argparse.Namespace): parsed command-line arguments
-#         dictionary (~fairseq.data.Dictionary): decoding dictionary
-#         embed_tokens (torch.nn.Embedding): output embedding
-#     """
-
-#     def __init__(self, args, dictionary, embed_tokens):
-#         super().__init__(args, dictionary, embed_tokens, no_encoder_attn=False)
-
-#         # In the pointer-generator model these arguments define the decoder
-#         # layer and the number of attention heads that will be averaged to
-#         # create the alignment for pointing.
-#         self.alignment_heads = args.alignment_heads
-#         self.alignment_layer = args.alignment_layer
-
-#         input_embed_dim = embed_tokens.embedding_dim
-
-#         # Generation probabilities / interpolation coefficients are predicted
-#         # from the current decoder input embedding and the decoder output, which
-#         # is the size of output_embed_dim.
-#         p_gen_input_size = input_embed_dim + self.output_embed_dim
-#         self.project_p_gens = nn.Linear(p_gen_input_size, 1)
-#         nn.init.zeros_(self.project_p_gens.bias)
-
-#         # The dictionary may include a separate entry for an OOV token in each
-#         # input position, so that their identity can be restored from the
-#         # original source text.
-#         self.num_types = len(dictionary)
-#         self.num_oov_types = args.source_position_markers
-#         self.num_embeddings = self.num_types - self.num_oov_types
-#         self.force_p_gen = args.force_generation
-
-#     def forward(
-#         self,
-#         prev_output_tokens,
-#         encoder_out: Optional[EncoderOut] = None,
-#         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-#         features_only: bool = False,
-#         alignment_layer: Optional[int] = 0,
-#         alignment_heads: Optional[int] = 1,
-#         src_lengths: Optional[Any] = None,
-#         return_all_hiddens: bool = False,
-#     ):
-#         """
-#         Args:
-#             prev_output_tokens (LongTensor): previous decoder outputs of shape
-#                 `(batch, tgt_len)`, for teacher forcing
-#             encoder_out (EncoderOut, optional): output from the encoder, used
-#                 for encoder-side attention
-#             incremental_state (dict, optional): dictionary used for storing
-#                 state during :ref:`Incremental decoding`
-#             features_only (bool, optional): only return features without
-#                 applying output layer (default: False)
-#             alignment_layer (int, optional): 0-based index of the layer to be
-#                 used for pointing (default: 0)
-#             alignment_heads (int, optional): number of attention heads to be
-#                 used for pointing (default: 1)
-#         Returns:
-#             tuple:
-#                 - the decoder's output of shape `(batch, tgt_len, vocab)`
-#                 - a dictionary with any model-specific outputs
-#         """
-#         # The normal Transformer model doesn't pass the alignment_layer and
-#         # alignment_heads parameters correctly. We use our local variables.
-#         x, extra = self.extract_features(
-#             prev_output_tokens,
-#             encoder_out=encoder_out,
-#             incremental_state=incremental_state,
-#             alignment_layer=self.alignment_layer,
-#             alignment_heads=self.alignment_heads,
-#         )
-#         if not features_only:
-#             # Embedding the tokens again for generation probability prediction,
-#             # so that we don't have to reimplement the whole extract_features()
-#             # method.
-#             if incremental_state is not None:
-#                 prev_output_tokens = prev_output_tokens[:, -1:]
-#             prev_output_embed = self.embed_tokens(prev_output_tokens)
-#             prev_output_embed *= self.embed_scale
-#             predictors = torch.cat((prev_output_embed, x), 2)
-#             p_gens = self.project_p_gens(predictors)
-#             p_gens = torch.sigmoid(p_gens)
-#             x = self.output_layer(x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
-#         return x, extra
-
-#     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
-#         """
-#         Project features to the vocabulary size and mix with the attention
-#         distributions.
-#         """
-#         if self.force_p_gen is not None:
-#             p_gens = self.force_p_gen
-
-#         # project back to size of vocabulary
-#         logits = super().output_layer(features, **kwargs)
-
-#         batch_size = logits.shape[0]
-#         output_length = logits.shape[1]
-#         assert logits.shape[2] == self.num_embeddings
-#         assert src_tokens.shape[0] == batch_size
-#         src_length = src_tokens.shape[1]
-
-#         # The final output distribution will be a mixture of the normal output
-#         # distribution (softmax of logits) and attention weights.
-#         gen_dists = super().get_normalized_probs(
-#             (logits, None), log_probs=False, sample=None
-#         )
-#         gen_dists = torch.mul(gen_dists, p_gens)
-#         padding_size = (batch_size, output_length, self.num_oov_types)
-#         padding = gen_dists.new_zeros(padding_size)
-#         gen_dists = torch.cat((gen_dists, padding), 2)
-#         assert gen_dists.shape[2] == self.num_types
-
-#         # Scatter attention distributions to distributions over the extended
-#         # vocabulary in a tensor of shape [batch_size, output_length,
-#         # vocab_size]. Each attention weight will be written into a location
-#         # that is for other dimensions the same as in the index tensor, but for
-#         # the third dimension it's the value of the index tensor (the token ID).
-#         attn = torch.mul(attn, 1 - p_gens)
-#         index = src_tokens[:, None, :]
-#         index = index.expand(batch_size, output_length, src_length)
-#         attn_dists_size = (batch_size, output_length, self.num_types)
-#         attn_dists = attn.new_zeros(attn_dists_size)
-#         attn_dists.scatter_add_(2, index, attn)
-
-#         # Final distributions, [batch_size, output_length, num_types].
-#         return gen_dists + attn_dists
-
-#     def get_normalized_probs(self, net_output, log_probs, sample):
-#         """
-#         Get normalized probabilities (or log probs) from a net's output.
-#         Pointer-generator network output is already normalized.
-#         """
-#         probs = net_output[0]
-#         # Make sure the probabilities are greater than zero when returning log
-#         # probabilities.
-#         return probs.clamp(1e-10, 1.0).log() if log_probs else probs
