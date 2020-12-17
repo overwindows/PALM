@@ -151,7 +151,6 @@ class PALMModel(TransformerModel):
             features_only = True
 
         # PALM Encoder
-        # print(src_tokens.size())
         encoder_out = self.encoder(
             src_tokens, segment_label, masked_tokens
         )
@@ -474,7 +473,7 @@ class PALMEncoder(FairseqEncoder):
         sentence_logits = None
         # if self.sentence_projection_layer:
         #     sentence_logits = self.sentence_projection_layer(pooled_output)
-        
+
         return {
             "encoder_out": [encoder_out],
             "masked_out": x,
@@ -494,7 +493,6 @@ class PALMEncoder(FairseqEncoder):
         Returns:
             *encoder_out* rearranged according to *new_order*
         """
-        # print(new_order)
         if len(encoder_out["encoder_out"]) == 0:
             new_encoder_out = []
         else:
@@ -530,7 +528,7 @@ class PALMEncoder(FairseqEncoder):
         # if len(encoder_states) > 0:
         #     for idx, state in enumerate(encoder_states):
         #         encoder_states[idx] = state.index_select(1, new_order)
-        
+
         # print(new_encoder_out[0].size(),new_encoder_padding_mask[0].size(),src_tokens[0].size())
         return {
             "encoder_out": new_encoder_out,  # T x B x C
@@ -752,8 +750,6 @@ class PALMDecoder(TransformerDecoder):
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
                 - a dictionary with any model-specific outputs
         """
-        # print(prev_output_tokens.size())
-        # print(encoder_out['encoder_out'][0].size())
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -828,7 +824,7 @@ class PALMDecoder(TransformerDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        # print(prev_output_tokens.size(), encoder_out['encoder_out'][0].size()) 
+        # print(prev_output_tokens.size(), encoder_out['encoder_out'][0].size())
         if alignment_layer is None:
             alignment_layer = self.num_layers - 1
 
@@ -880,7 +876,8 @@ class PALMDecoder(TransformerDecoder):
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
-            assert encoder_out is not None and len(encoder_out["encoder_out"]) > 0
+            assert encoder_out is not None and len(
+                encoder_out["encoder_out"]) > 0
             x, layer_attn, _ = layer(
                 x,
                 encoder_out["encoder_out"][0]
@@ -951,7 +948,8 @@ class PALMDecoder(TransformerDecoder):
         batch_size = logits.shape[0]
         output_length = logits.shape[1]
         assert logits.shape[2] == self.num_embeddings
-        assert src_tokens.shape[0] == batch_size
+        assert src_tokens.shape[0] == batch_size, (
+            batch_size, src_tokens.size())
         src_length = src_tokens.shape[1]
 
         # The final output distribution will be a mixture of the normal output

@@ -177,13 +177,11 @@ def train(
     cfg: DictConfig, trainer: Trainer, task: tasks.FairseqTask, epoch_itr
 ) -> Tuple[List[Optional[float]], bool]:
     """Train the model for one epoch and return validation losses."""
-    # print(len(epoch_itr))
     # Initialize data iterator
     itr = epoch_itr.next_epoch_itr(
         fix_batches_to_gpus=cfg.distributed_training.fix_batches_to_gpus,
         shuffle=(epoch_itr.next_epoch_idx > cfg.dataset.curriculum),
     )
-    # print(len(itr))
     update_freq = (
         cfg.optimization.update_freq[epoch_itr.epoch - 1]
         if epoch_itr.epoch <= len(cfg.optimization.update_freq)
@@ -192,7 +190,6 @@ def train(
     itr = iterators.GroupedIterator(itr, update_freq)
     if getattr(cfg.common, "tpu", False):
         itr = utils.tpu_data_loader(itr)
-    # print(len(itr))
     progress = progress_bar.progress_bar(
         itr,
         log_format=cfg.common.log_format,

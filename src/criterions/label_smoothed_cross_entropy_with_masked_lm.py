@@ -59,7 +59,7 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         masked_targets = model.get_masked_targets(sample)
         if masked_tokens is not None:
             masked_targets = masked_targets[masked_tokens]
-
+        # print(sample['net_input'].keys())
         net_output = model(**sample["net_input"], masked_tokens=masked_tokens)
 
         # loss for decoder

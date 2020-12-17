@@ -448,6 +448,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         return loss, sample_size, logging_output
 
     def reduce_metrics(self, logging_outputs, criterion):
+        # print('task reduce_metrics')
         super().reduce_metrics(logging_outputs, criterion)
         if self.args.eval_bleu:
 
