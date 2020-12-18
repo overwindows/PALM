@@ -706,13 +706,13 @@ class PALMDecoder(TransformerDecoder):
         self.num_embeddings = self.num_types - self.num_oov_types
         self.force_p_gen = args.force_generation
 
-        self.copy_attention = args.copy_attention
-        self.attention_dropout = args.attention_dropout
-        if self.copy_attention:
-            self.copy_attn_layer = MultiheadAttention(
-                embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout)
-            self.copy_alpha_linear = nn.Linear(embed_dim, 1)
-            torch.nn.init.constant_(self.copy_alpha_linear.bias, 1.)
+        # self.copy_attention = args.copy_attention
+        # self.attention_dropout = args.attention_dropout
+        # if self.copy_attention:
+        #     self.copy_attn_layer = MultiheadAttention(
+        #         embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout)
+        #     self.copy_alpha_linear = nn.Linear(embed_dim, 1)
+        #     torch.nn.init.constant_(self.copy_alpha_linear.bias, 1.)
         self.classifier = nn.Linear(embed_dim, 2)
 
     def build_decoder_layer(self, args, no_encoder_attn=False):
@@ -750,7 +750,7 @@ class PALMDecoder(TransformerDecoder):
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
                 - a dictionary with any model-specific outputs
         """
-        x, extra = self.extract_features(
+        x, extra = self.extract_features_scriptable(
             prev_output_tokens,
             encoder_out=encoder_out,
             incremental_state=incremental_state,
@@ -775,23 +775,23 @@ class PALMDecoder(TransformerDecoder):
 
         return x, extra
 
-    def extract_features(
-        self,
-        prev_output_tokens,
-        encoder_out: Optional[Dict[str, List[Tensor]]],
-        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-        full_context_alignment: bool = False,
-        alignment_layer: Optional[int] = None,
-        alignment_heads: Optional[int] = None,
-    ):
-        return self.extract_features_scriptable(
-            prev_output_tokens,
-            encoder_out,
-            incremental_state,
-            full_context_alignment,
-            alignment_layer,
-            alignment_heads,
-        )
+    # def extract_features(
+    #     self,
+    #     prev_output_tokens,
+    #     encoder_out: Optional[Dict[str, List[Tensor]]],
+    #     incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
+    #     full_context_alignment: bool = False,
+    #     alignment_layer: Optional[int] = None,
+    #     alignment_heads: Optional[int] = None,
+    # ):
+    #     return self.extract_features_scriptable(
+    #         prev_output_tokens,
+    #         encoder_out,
+    #         incremental_state,
+    #         full_context_alignment,
+    #         alignment_layer,
+    #         alignment_heads,
+    #     )
 
     """
     A scriptable subclass of this class has an extract_features method and calls
@@ -824,7 +824,6 @@ class PALMDecoder(TransformerDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        # print(prev_output_tokens.size(), encoder_out['encoder_out'][0].size())
         if alignment_layer is None:
             alignment_layer = self.num_layers - 1
 
@@ -906,22 +905,22 @@ class PALMDecoder(TransformerDecoder):
             # average probabilities over heads
             attn = attn.mean(dim=0)
 
-        copy_attn, copy_alpha = None, None
-        if self.copy_attention:
-            assert encoder_out is not None, \
-                "--copy-attn can't be used with decoder only architecture"
-            x_copy, copy_attn = self.copy_attn_layer(
-                query=x,
-                key=encoder_out['encoder_out'][0],
-                value=encoder_out['encoder_out'][0],
-                key_padding_mask=encoder_out['encoder_padding_mask'][0],
-                incremental_state=incremental_state,
-                static_kv=True,
-                need_weights=True,
-            )
-            x_copy = x_copy.transpose(0, 1)
-            copy_alpha = torch.sigmoid(self.copy_alpha_linear(x_copy))
-            attn = copy_attn  # use copy attn for alignment
+        # copy_attn, copy_alpha = None, None
+        # if self.copy_attention:
+        #     assert encoder_out is not None, \
+        #         "--copy-attn can't be used with decoder only architecture"
+        #     x_copy, copy_attn = self.copy_attn_layer(
+        #         query=x,
+        #         key=encoder_out['encoder_out'][0],
+        #         value=encoder_out['encoder_out'][0],
+        #         key_padding_mask=encoder_out['encoder_padding_mask'][0],
+        #         incremental_state=incremental_state,
+        #         static_kv=True,
+        #         need_weights=True,
+        #     )
+        #     x_copy = x_copy.transpose(0, 1)
+        #     copy_alpha = torch.sigmoid(self.copy_alpha_linear(x_copy))
+        #     attn = copy_attn  # use copy attn for alignment
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
@@ -1137,9 +1136,9 @@ def palm_large_architecture(args):
     args.pooler_activation_fn = getattr(args, "pooler_activation_fn", "tanh")
     args.pooler_dropout = getattr(args, "pooler_dropout", 0.0)
 
-    args.copy_attention = getattr(args, 'copy_attention', False)
-    args.copy_attention_heads = getattr(args, 'copy_attention_heads', 1)
-    args.copy_attention_dropout = getattr(args, 'copy_attention_dropout', 0.)
+    # args.copy_attention = getattr(args, 'copy_attention', False)
+    # args.copy_attention_heads = getattr(args, 'copy_attention_heads', 1)
+    # args.copy_attention_dropout = getattr(args, 'copy_attention_dropout', 0.)
 
     args.alignment_heads = getattr(args, "alignment_heads", 1)
     args.alignment_layer = getattr(args, "alignment_layer", -1)
