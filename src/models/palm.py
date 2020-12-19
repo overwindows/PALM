@@ -8,14 +8,14 @@ PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-con
 from typing import Optional
 import math
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
 from fairseq import utils
 from fairseq.models import (
-    register_model, register_model_architecture)
-from fairseq.models.transformer import TransformerModel, TransformerDecoder, TransformerEncoder
+    register_model, register_model_architecture, FairseqEncoder)
+from fairseq.models.transformer import TransformerModel, TransformerDecoder
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 from fairseq.modules import (
     PositionalEmbedding,
@@ -101,12 +101,12 @@ class PALMModel(TransformerModel):
         assert encoder_embed_tokens == decoder_embed_tokens
         encoder = PALMEncoder(args, src_dict, encoder_embed_tokens)
         decoder = PALMDecoder(args, tgt_dict, decoder_embed_tokens)
-        
+
         return PALMModel(args, encoder, decoder)
 
     @staticmethod
     def add_args(parser):
-        super(PALMModel, PALMModel).add_args(parser)
+        TransformerModel.add_args(parser)
 
         parser.add_argument(
             "--pooler-dropout",
@@ -368,13 +368,13 @@ class PALMModel(TransformerModel):
                     state_dict[prefix + "classification_heads." + k] = v
 
 
-class PALMEncoder(TransformerEncoder):
+class PALMEncoder(FairseqEncoder):
     """
     Encoder for Masked Language Modelling.
     """
 
     def __init__(self, args, dictionary, embed_tokens):
-        super().__init__(args, dictionary, embed_tokens)
+        super().__init__(dictionary)
         self.padding_idx = dictionary.pad()
         self.vocab_size = dictionary.__len__()
         self.max_source_positions = args.max_positions
@@ -764,20 +764,19 @@ class PALMDecoder(TransformerDecoder):
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
         )
-        assert not features_only
-        if not features_only:
-            # Embedding the tokens again for generation probability prediction,
-            # so that we don't have to reimplement the whole extract_features()
-            # method.
-            if incremental_state is not None:
-                prev_output_tokens = prev_output_tokens[:, -1:]
-            prev_output_embed = self.embed_tokens(prev_output_tokens)
-            prev_output_embed *= self.embed_scale
-            predictors = torch.cat((prev_output_embed, x), 2)
-            p_gens = self.project_p_gens(predictors)
-            p_gens = torch.sigmoid(p_gens)
-            x = self.output_layer(
-                x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
+
+        # Embedding the tokens again for generation probability prediction,
+        # so that we don't have to reimplement the whole extract_features()
+        # method.
+        if incremental_state is not None:
+            prev_output_tokens = prev_output_tokens[:, -1:]
+        prev_output_embed = self.embed_tokens(prev_output_tokens)
+        prev_output_embed *= self.embed_scale
+        predictors = torch.cat((prev_output_embed, x), 2)
+        p_gens = self.project_p_gens(predictors)
+        p_gens = torch.sigmoid(p_gens)
+        x = self.output_layer(
+            x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
 
         return x, extra
 

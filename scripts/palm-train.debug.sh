@@ -1,5 +1,5 @@
 DATA_BIN=/datadrive/cnn_dm_bin
-EXP_NAME=exp00
+EXP_NAME=exp01
 total_updates=20000
 warmup_updates=500
 lr=0.001
@@ -7,7 +7,7 @@ max_tokens=4096
 update_freq=4
 pointer_layer=-2
 
-CUDA_VISIBLE_DEVICES=1 python -m utils.train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=0 python -m utils.train $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
 --task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
 --share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \
@@ -37,7 +37,7 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train $DATA_BIN \
 --no-epoch-checkpoints \
 --best-checkpoint-metric loss \
 --save-dir /bigdata/"$EXP_NAME"_checkpoints \
---reset-optimizer --reset-meters --tensorboard-logdir /bigdata/logdir/$EXP_NAME
+--reset-optimizer --reset-meters --reset-dataloader --tensorboard-logdir /bigdata/logdir/$EXP_NAME
 
 # --sample-break-mode complete_doc \
 # --mask 0.3 \

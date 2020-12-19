@@ -59,7 +59,6 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         masked_targets = model.get_masked_targets(sample)
         if masked_tokens is not None:
             masked_targets = masked_targets[masked_tokens]
-        # print(sample['net_input'].keys())
         net_output = model(**sample["net_input"], masked_tokens=masked_tokens)
 
         # loss for decoder
@@ -157,10 +156,10 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         metrics.log_scalar(
             "nll_loss", nll_loss_sum / ntokens / math.log(2), ntokens, round=3
         )
-        # assert masked_sample_size > 0
-        # metrics.log_scalar(
-        #     "masked_loss", masked_loss_sum / masked_sample_size / math.log(2), masked_sample_size, round=3
-        # )
+        assert masked_sample_size > 0
+        metrics.log_scalar(
+            "masked_loss", masked_loss_sum / masked_sample_size / math.log(2), masked_sample_size, round=3
+        )
         # metrics.log_scalar(
         #     "alignment_loss",
         #     alignment_loss_sum / sample_size / math.log(2),

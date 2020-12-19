@@ -54,8 +54,8 @@ def load_langpair_dataset(
     # Masked LM parameters.
     mask_idx: int = 0,
     seed: int = 1,
-    mask_prob: float = 0.0001,
-    leave_unmasked_prob: float = 1.0,
+    mask_prob: float = 0.1,
+    leave_unmasked_prob: float = 0.9,
     random_token_prob: float = 0.0,
     freq_weighted_replacement: bool = False,
     mask_whole_words: torch.Tensor = None,
