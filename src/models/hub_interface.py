@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class PALMHubInterface(GeneratorHubInterface):
-    """A simple PyTorch Hub interface to BART.
+    """A simple PyTorch Hub interface to PALM.
 
     Usage: https://github.com/pytorch/fairseq/tree/master/examples/bart
     """

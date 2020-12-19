@@ -4,21 +4,20 @@
 """
 PALM: Pre-training an Autoencoding&Autoregressive Language Model for Context-conditioned Generation
 """
+
 from typing import Optional
 import math
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from fairseq.models.fairseq_encoder import EncoderOut
 
 import torch
 import torch.nn as nn
 from fairseq import utils
 from fairseq.models import (
-    register_model, register_model_architecture, FairseqModel, FairseqEncoder)
-from fairseq.models.transformer import TransformerModel, TransformerDecoder
+    register_model, register_model_architecture)
+from fairseq.models.transformer import TransformerModel, TransformerDecoder, TransformerEncoder
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 from fairseq.modules import (
-    MultiheadAttention,
     PositionalEmbedding,
     FairseqDropout,
     LayerNorm,
@@ -26,7 +25,6 @@ from fairseq.modules import (
     TransformerSentenceEncoder,
     SinusoidalPositionalEmbedding,
 )
-# from fairseq.models.fairseq_incremental_decoder import FairseqIncrementalDecoder
 
 from torch import Tensor
 from .hub_interface import PALMHubInterface
@@ -55,15 +53,9 @@ class PALMModel(TransformerModel):
         # We follow BERT's random weight initialization
         self.apply(init_bert_params)
 
-        self.classification_heads = nn.ModuleDict()
+        # self.classification_heads = nn.ModuleDict()
         if hasattr(self.encoder, "dictionary"):
             self.eos: int = self.encoder.dictionary.eos()
-
-        # self.copy_attention = args.copy_attention
-        # if self.copy_attention:
-        #     self.copy_attn_layer = MultiheadAttention(
-        #         args.decoder_embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout, encoder_decoder_attention=True)
-        #     self.copy_alpha_linear = nn.Linear(args.decoder_embed_dim, 1)
 
     def get_masked_targets(self, sample):
         """Get targets from either the sample or the net's output."""
@@ -75,15 +67,41 @@ class PALMModel(TransformerModel):
         palm_base_architecture(args)
         if not hasattr(args, "max_positions"):
             args.max_positions = args.tokens_per_sample
-        # print('Model max positions: {}'.format(args.max_positions))
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
         if src_dict != tgt_dict:
             raise ValueError("PALM requires a joined dictionary")
 
-        transformer_model = TransformerModel.build_model(args, task)
-        encoder = PALMEncoder(args, src_dict)
-        decoder = PALMDecoder(
-            args, tgt_dict, transformer_model.decoder.embed_tokens)
+        if args.share_all_embeddings:
+            if src_dict != tgt_dict:
+                raise ValueError(
+                    "--share-all-embeddings requires a joined dictionary")
+            if args.encoder_embed_dim != args.decoder_embed_dim:
+                raise ValueError(
+                    "--share-all-embeddings requires --encoder-embed-dim to match --decoder-embed-dim"
+                )
+            if args.decoder_embed_path and (
+                args.decoder_embed_path != args.encoder_embed_path
+            ):
+                raise ValueError(
+                    "--share-all-embeddings not compatible with --decoder-embed-path"
+                )
+            encoder_embed_tokens = cls.build_embedding(
+                args, src_dict, args.encoder_embed_dim, args.encoder_embed_path
+            )
+            decoder_embed_tokens = encoder_embed_tokens
+            args.share_decoder_input_output_embed = True
+        else:
+            encoder_embed_tokens = cls.build_embedding(
+                args, src_dict, args.encoder_embed_dim, args.encoder_embed_path
+            )
+            decoder_embed_tokens = cls.build_embedding(
+                args, tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
+            )
+
+        assert encoder_embed_tokens == decoder_embed_tokens
+        encoder = PALMEncoder(args, src_dict, encoder_embed_tokens)
+        decoder = PALMDecoder(args, tgt_dict, decoder_embed_tokens)
+        
         return PALMModel(args, encoder, decoder)
 
     @staticmethod
@@ -96,23 +114,23 @@ class PALMModel(TransformerModel):
             metavar="D",
             help="dropout probability in the masked_lm pooler layers",
         )
-        parser.add_argument(
-            "--pooler-activation-fn",
-            choices=utils.get_available_activation_fns(),
-            help="activation function to use for pooler layer",
-        )
-        parser.add_argument(
-            "--spectral-norm-classification-head",
-            action="store_true",
-            help="Apply spectral normalization on the classification head",
-        )
+        # parser.add_argument(
+        #     "--pooler-activation-fn",
+        #     choices=utils.get_available_activation_fns(),
+        #     help="activation function to use for pooler layer",
+        # )
+        # parser.add_argument(
+        #     "--spectral-norm-classification-head",
+        #     action="store_true",
+        #     help="Apply spectral normalization on the classification head",
+        # )
 
-        parser.add_argument('--copy-attention', default=False, action='store_true',
-                            help='train transformer decoder with copy attention')
-        parser.add_argument('--copy-attention-heads', type=int, metavar='N', default=1,
-                            help='num copy layer attention heads')
-        parser.add_argument('--copy-attention-dropout', type=float, metavar='D', default=0.,
-                            help='num copy layer attention dropout')
+        # parser.add_argument('--copy-attention', default=False, action='store_true',
+        #                     help='train transformer decoder with copy attention')
+        # parser.add_argument('--copy-attention-heads', type=int, metavar='N', default=1,
+        #                     help='num copy layer attention heads')
+        # parser.add_argument('--copy-attention-dropout', type=float, metavar='D', default=0.,
+        #                     help='num copy layer attention dropout')
         parser.add_argument('--alignment-heads', type=int, metavar='N',
                             help='number of attention heads to be used for '
                                  'pointing')
@@ -140,15 +158,15 @@ class PALMModel(TransformerModel):
         masked_tokens=None,
         prev_output_tokens=None,
         features_only: bool = False,
-        classification_head_name: Optional[str] = None,
+        # classification_head_name: Optional[str] = None,
         token_embeddings: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = True,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
         segment_label=None,
     ):
-        if classification_head_name is not None:
-            features_only = True
+        # if classification_head_name is not None:
+        #     features_only = True
 
         # PALM Encoder
         encoder_out = self.encoder(
@@ -164,16 +182,16 @@ class PALMModel(TransformerModel):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
         )
-        eos: int = self.eos
-        if classification_head_name is not None:
-            sentence_representation = x[
-                src_tokens.eq(eos), :
-            ].view(x.size(0), -1, x.size(-1))[:, -1, :]
-            for k, head in self.classification_heads.items():
-                # for torch script only supports iteration
-                if k == classification_head_name:
-                    x = head(sentence_representation)
-                    break
+        # eos: int = self.eos
+        # if classification_head_name is not None:
+        #     sentence_representation = x[
+        #         src_tokens.eq(eos), :
+        #     ].view(x.size(0), -1, x.size(-1))[:, -1, :]
+        #     for k, head in self.classification_heads.items():
+        #         # for torch script only supports iteration
+        #         if k == classification_head_name:
+        #             x = head(sentence_representation)
+        #             break
         return x, extra
 
     @classmethod
@@ -200,31 +218,31 @@ class PALMModel(TransformerModel):
         )
         return PALMHubInterface(x["args"], x["task"], x["models"][0])
 
-    def register_classification_head(
-        self, name, num_classes=None, inner_dim=None, **kwargs
-    ):
-        """Register a classification head."""
-        logger.info("Registering classification head: {0}".format(name))
-        if name in self.classification_heads:
-            prev_num_classes = self.classification_heads[name].out_proj.out_features
-            prev_inner_dim = self.classification_heads[name].dense.out_features
-            if num_classes != prev_num_classes or inner_dim != prev_inner_dim:
-                logger.warning(
-                    're-registering head "{}" with num_classes {} (prev: {}) '
-                    "and inner_dim {} (prev: {})".format(
-                        name, num_classes, prev_num_classes, inner_dim, prev_inner_dim
-                    )
-                )
-        self.classification_heads[name] = PALMClassificationHead(
-            input_dim=self.args.encoder_embed_dim,
-            inner_dim=inner_dim or self.args.encoder_embed_dim,
-            num_classes=num_classes,
-            activation_fn=self.args.pooler_activation_fn,
-            pooler_dropout=self.args.pooler_dropout,
-            do_spectral_norm=getattr(
-                self.args, "spectral_norm_classification_head", False
-            ),
-        )
+    # def register_classification_head(
+    #     self, name, num_classes=None, inner_dim=None, **kwargs
+    # ):
+    #     """Register a classification head."""
+    #     logger.info("Registering classification head: {0}".format(name))
+    #     if name in self.classification_heads:
+    #         prev_num_classes = self.classification_heads[name].out_proj.out_features
+    #         prev_inner_dim = self.classification_heads[name].dense.out_features
+    #         if num_classes != prev_num_classes or inner_dim != prev_inner_dim:
+    #             logger.warning(
+    #                 're-registering head "{}" with num_classes {} (prev: {}) '
+    #                 "and inner_dim {} (prev: {})".format(
+    #                     name, num_classes, prev_num_classes, inner_dim, prev_inner_dim
+    #                 )
+    #             )
+    #     self.classification_heads[name] = PALMClassificationHead(
+    #         input_dim=self.args.encoder_embed_dim,
+    #         inner_dim=inner_dim or self.args.encoder_embed_dim,
+    #         num_classes=num_classes,
+    #         activation_fn=self.args.pooler_activation_fn,
+    #         pooler_dropout=self.args.pooler_dropout,
+    #         do_spectral_norm=getattr(
+    #             self.args, "spectral_norm_classification_head", False
+    #         ),
+    #     )
 
     def upgrade_state_dict_named(self, state_dict, name):
         super().upgrade_state_dict_named(state_dict, name)
@@ -350,13 +368,13 @@ class PALMModel(TransformerModel):
                     state_dict[prefix + "classification_heads." + k] = v
 
 
-class PALMEncoder(FairseqEncoder):
+class PALMEncoder(TransformerEncoder):
     """
     Encoder for Masked Language Modelling.
     """
 
-    def __init__(self, args, dictionary):
-        super().__init__(dictionary)
+    def __init__(self, args, dictionary, embed_tokens):
+        super().__init__(args, dictionary, embed_tokens)
         self.padding_idx = dictionary.pad()
         self.vocab_size = dictionary.__len__()
         self.max_source_positions = args.max_positions
@@ -439,12 +457,10 @@ class PALMEncoder(FairseqEncoder):
                   this is specified in the input arguments.
         """
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
-        # print(src_tokens.size())
         inner_states, sentence_rep = self.sentence_encoder(
             src_tokens,
             segment_labels=segment_labels,
         )
-        # print('last layer size: {}'.format(inner_states[-1].size()))
         x = inner_states[-1].transpose(0, 1)
 
         # Keep original tokens
@@ -470,7 +486,7 @@ class PALMEncoder(FairseqEncoder):
             x = self.embed_out(x)
         if self.lm_output_learned_bias is not None:
             x = x + self.lm_output_learned_bias
-        sentence_logits = None
+        # sentence_logits = None
         # if self.sentence_projection_layer:
         #     sentence_logits = self.sentence_projection_layer(pooled_output)
 
@@ -514,10 +530,8 @@ class PALMEncoder(FairseqEncoder):
         if len(encoder_out["src_tokens"]) == 0:
             src_tokens = []
         else:
-            # print('src_tokens size before: {}'.format(encoder_out["src_tokens"][0].size()))
             src_tokens = [(encoder_out["src_tokens"][0]
                            ).index_select(0, new_order)]
-            # print('src_tokens size after: {}'.format(src_tokens[0].size()))
         # if len(encoder_out["src_lengths"]) == 0:
         #     src_lengths = []
         # else:
@@ -529,7 +543,6 @@ class PALMEncoder(FairseqEncoder):
         #     for idx, state in enumerate(encoder_states):
         #         encoder_states[idx] = state.index_select(1, new_order)
 
-        # print(new_encoder_out[0].size(),new_encoder_padding_mask[0].size(),src_tokens[0].size())
         return {
             "encoder_out": new_encoder_out,  # T x B x C
             "encoder_padding_mask": new_encoder_padding_mask,  # B x T
@@ -706,14 +719,7 @@ class PALMDecoder(TransformerDecoder):
         self.num_embeddings = self.num_types - self.num_oov_types
         self.force_p_gen = args.force_generation
 
-        # self.copy_attention = args.copy_attention
-        # self.attention_dropout = args.attention_dropout
-        # if self.copy_attention:
-        #     self.copy_attn_layer = MultiheadAttention(
-        #         embed_dim, args.copy_attention_heads, dropout=args.copy_attention_dropout)
-        #     self.copy_alpha_linear = nn.Linear(embed_dim, 1)
-        #     torch.nn.init.constant_(self.copy_alpha_linear.bias, 1.)
-        self.classifier = nn.Linear(embed_dim, 2)
+        # self.classifier = nn.Linear(embed_dim, 2)
 
     def build_decoder_layer(self, args, no_encoder_attn=False):
         layer = TransformerDecoderLayer(args, no_encoder_attn)
@@ -774,24 +780,6 @@ class PALMDecoder(TransformerDecoder):
                 x, extra["attn"][0], encoder_out["src_tokens"][0], p_gens)
 
         return x, extra
-
-    # def extract_features(
-    #     self,
-    #     prev_output_tokens,
-    #     encoder_out: Optional[Dict[str, List[Tensor]]],
-    #     incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-    #     full_context_alignment: bool = False,
-    #     alignment_layer: Optional[int] = None,
-    #     alignment_heads: Optional[int] = None,
-    # ):
-    #     return self.extract_features_scriptable(
-    #         prev_output_tokens,
-    #         encoder_out,
-    #         incremental_state,
-    #         full_context_alignment,
-    #         alignment_layer,
-    #         alignment_heads,
-    #     )
 
     """
     A scriptable subclass of this class has an extract_features method and calls
@@ -869,7 +857,6 @@ class PALMDecoder(TransformerDecoder):
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
 
-        # print(x.size(), encoder_out['encoder_out'][0].size())
         for idx, layer in enumerate(self.layers):
             if incremental_state is None and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
@@ -905,23 +892,6 @@ class PALMDecoder(TransformerDecoder):
             # average probabilities over heads
             attn = attn.mean(dim=0)
 
-        # copy_attn, copy_alpha = None, None
-        # if self.copy_attention:
-        #     assert encoder_out is not None, \
-        #         "--copy-attn can't be used with decoder only architecture"
-        #     x_copy, copy_attn = self.copy_attn_layer(
-        #         query=x,
-        #         key=encoder_out['encoder_out'][0],
-        #         value=encoder_out['encoder_out'][0],
-        #         key_padding_mask=encoder_out['encoder_padding_mask'][0],
-        #         incremental_state=incremental_state,
-        #         static_kv=True,
-        #         need_weights=True,
-        #     )
-        #     x_copy = x_copy.transpose(0, 1)
-        #     copy_alpha = torch.sigmoid(self.copy_alpha_linear(x_copy))
-        #     attn = copy_attn  # use copy attn for alignment
-
         if self.layer_norm is not None:
             x = self.layer_norm(x)
 
@@ -931,7 +901,7 @@ class PALMDecoder(TransformerDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": [attn], "inner_states": inner_states, "encoder_out": encoder_out}
+        return x, {"attn": [attn], "inner_states": inner_states, "masked_out": encoder_out['masked_out']}
 
     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
         """
@@ -1056,35 +1026,35 @@ class PALMDecoder(TransformerDecoder):
         return state_dict
 
 
-class PALMClassificationHead(nn.Module):
-    """Head for sentence-level classification tasks."""
+# class PALMClassificationHead(nn.Module):
+#     """Head for sentence-level classification tasks."""
 
-    def __init__(
-        self,
-        input_dim,
-        inner_dim,
-        num_classes,
-        activation_fn,
-        pooler_dropout,
-        do_spectral_norm=False,
-    ):
-        super().__init__()
-        self.dense = nn.Linear(input_dim, inner_dim)
-        self.activation_fn = utils.get_activation_fn(activation_fn)
-        self.dropout = nn.Dropout(p=pooler_dropout)
-        self.out_proj = nn.Linear(inner_dim, num_classes)
+#     def __init__(
+#         self,
+#         input_dim,
+#         inner_dim,
+#         num_classes,
+#         activation_fn,
+#         pooler_dropout,
+#         do_spectral_norm=False,
+#     ):
+#         super().__init__()
+#         self.dense = nn.Linear(input_dim, inner_dim)
+#         self.activation_fn = utils.get_activation_fn(activation_fn)
+#         self.dropout = nn.Dropout(p=pooler_dropout)
+#         self.out_proj = nn.Linear(inner_dim, num_classes)
 
-        if do_spectral_norm:
-            self.out_proj = torch.nn.utils.spectral_norm(self.out_proj)
+#         if do_spectral_norm:
+#             self.out_proj = torch.nn.utils.spectral_norm(self.out_proj)
 
-    def forward(self, features, **kwargs):
-        x = features
-        x = self.dropout(x)
-        x = self.dense(x)
-        x = self.activation_fn(x)
-        x = self.dropout(x)
-        x = self.out_proj(x)
-        return x
+#     def forward(self, features, **kwargs):
+#         x = features
+#         x = self.dropout(x)
+#         x = self.dense(x)
+#         x = self.activation_fn(x)
+#         x = self.dropout(x)
+#         x = self.out_proj(x)
+#         return x
 
 
 @register_model_architecture("palm", "palm_large")
@@ -1097,7 +1067,7 @@ def palm_large_architecture(args):
     args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 16)
     args.encoder_normalize_before = getattr(
         args, "encoder_normalize_before", False)
-    args.encoder_learned_pos = getattr(args, "encoder_learned_pos", True)
+    args.encoder_learned_pos = getattr(args, "encoder_learned_pos", False)
     args.decoder_embed_path = getattr(args, "decoder_embed_path", None)
     args.decoder_embed_dim = getattr(
         args, "decoder_embed_dim", args.encoder_embed_dim)
@@ -1108,7 +1078,7 @@ def palm_large_architecture(args):
     args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 16)
     args.decoder_normalize_before = getattr(
         args, "decoder_normalize_before", False)
-    args.decoder_learned_pos = getattr(args, "decoder_learned_pos", True)
+    args.decoder_learned_pos = getattr(args, "decoder_learned_pos", False)
     args.attention_dropout = getattr(args, "attention_dropout", 0.0)
     args.relu_dropout = getattr(args, "relu_dropout", 0.0)
     args.dropout = getattr(args, "dropout", 0.1)
@@ -1136,7 +1106,8 @@ def palm_large_architecture(args):
     args.pooler_activation_fn = getattr(args, "pooler_activation_fn", "tanh")
     args.pooler_dropout = getattr(args, "pooler_dropout", 0.0)
 
-    # args.copy_attention = getattr(args, 'copy_attention', False)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
+
     # args.copy_attention_heads = getattr(args, 'copy_attention_heads', 1)
     # args.copy_attention_dropout = getattr(args, 'copy_attention_dropout', 0.)
 

@@ -54,9 +54,9 @@ def load_langpair_dataset(
     # Masked LM parameters.
     mask_idx: int = 0,
     seed: int = 1,
-    mask_prob: float = 0.15,
-    leave_unmasked_prob: float = 0.1,
-    random_token_prob: float = 0.1,
+    mask_prob: float = 0.0001,
+    leave_unmasked_prob: float = 1.0,
+    random_token_prob: float = 0.0,
     freq_weighted_replacement: bool = False,
     mask_whole_words: torch.Tensor = None,
     mask_multiple_length: int = 1,
@@ -175,7 +175,6 @@ def load_langpair_dataset(
         mask_stdev=mask_stdev,
     )
 
-    # print(len(src_dataset.sizes), len(tgt_dataset_sizes), len(masked_src_dataset.sizes))
     return LanguagePairDataset(
         src_dataset,
         src_dataset.sizes,
@@ -448,7 +447,6 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         return loss, sample_size, logging_output
 
     def reduce_metrics(self, logging_outputs, criterion):
-        # print('task reduce_metrics')
         super().reduce_metrics(logging_outputs, criterion)
         if self.args.eval_bleu:
 

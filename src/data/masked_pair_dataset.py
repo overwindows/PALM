@@ -92,7 +92,7 @@ def collate(
             [s["target"].ne(pad_idx).long().sum() for s in samples]
         ).index_select(0, sort_order)
         ntokens = tgt_lengths.sum().item()
-
+        assert input_feeding
         if samples[0].get("prev_output_tokens", None) is not None:
             prev_output_tokens = merge(
                 "prev_output_tokens", left_pad=left_pad_target)
@@ -255,8 +255,6 @@ class LanguagePairDataset(FairseqDataset):
         self.src_sizes = np.array(src_sizes)
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
         self.masked_src_sizes = np.array(masked_src_sizes)
-
-        # assert self.src_sizes == self.masked_src_sizes
 
         self.sizes = (
             np.vstack((self.src_sizes, self.tgt_sizes)).T
