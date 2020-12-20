@@ -521,12 +521,11 @@ class PALMEncoder(FairseqEncoder):
                 encoder_out["encoder_padding_mask"][0].index_select(
                     0, new_order)
             ]
-        # if len(encoder_out["encoder_embedding"]) == 0:
-        #     new_encoder_embedding = []
-        # else:
-        #     new_encoder_embedding = [
-        #         encoder_out["encoder_embedding"][0].index_select(0, new_order)
-        #     ]
+        if len(encoder_out["masked_out"]) == 0:
+             new_masked_out = None
+        else:
+            new_masked_out = encoder_out["masked_out"][0].index_select(0, new_order)
+            
         if len(encoder_out["src_tokens"]) == 0:
             src_tokens = []
         else:
@@ -546,7 +545,7 @@ class PALMEncoder(FairseqEncoder):
         return {
             "encoder_out": new_encoder_out,  # T x B x C
             "encoder_padding_mask": new_encoder_padding_mask,  # B x T
-            # "encoder_embedding": new_encoder_embedding,  # B x T x C
+            "masked_out": new_masked_out,
             # "encoder_states": encoder_states,  # List[T x B x C]
             "src_tokens": src_tokens,  # B x T
             # "src_lengths": src_lengths,  # B x 1

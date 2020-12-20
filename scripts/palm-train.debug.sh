@@ -7,7 +7,7 @@ max_tokens=4096
 update_freq=4
 pointer_layer=-2
 
-CUDA_VISIBLE_DEVICES=0 python -m utils.train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=1 python -m utils.train $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
 --task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
 --share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \

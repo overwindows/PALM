@@ -54,8 +54,8 @@ def load_langpair_dataset(
     # Masked LM parameters.
     mask_idx: int = 0,
     seed: int = 1,
-    mask_prob: float = 0.1,
-    leave_unmasked_prob: float = 0.9,
+    mask_prob: float = 0.01,
+    leave_unmasked_prob: float = 0.99,
     random_token_prob: float = 0.0,
     freq_weighted_replacement: bool = False,
     mask_whole_words: torch.Tensor = None,
@@ -159,6 +159,7 @@ def load_langpair_dataset(
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
+    print(mask_prob, leave_unmasked_prob, random_token_prob)
     # mask source dataset.
     src_dataset, masked_src_dataset = MaskTokensDataset.apply_mask(
         src_dataset,
@@ -174,6 +175,10 @@ def load_langpair_dataset(
         mask_multiple_length=mask_multiple_length,
         mask_stdev=mask_stdev,
     )
+    
+    # Print samples.
+    print(src_dataset[-1])
+    print(masked_src_dataset[-1])
 
     return LanguagePairDataset(
         src_dataset,
