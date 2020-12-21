@@ -12,17 +12,18 @@ from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 from fairseq import utils
 from fairseq.models import (
-    register_model, register_model_architecture, FairseqEncoder)
-from fairseq.models.transformer import TransformerModel, TransformerDecoder
+    register_model, register_model_architecture)
+from fairseq.models.transformer import TransformerModel, TransformerDecoder, TransformerEncoder
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 from fairseq.modules import (
     PositionalEmbedding,
     FairseqDropout,
     LayerNorm,
     TransformerDecoderLayer,
-    TransformerSentenceEncoder,
     SinusoidalPositionalEmbedding,
 )
 
@@ -53,13 +54,8 @@ class PALMModel(TransformerModel):
         # We follow BERT's random weight initialization
         self.apply(init_bert_params)
 
-        # self.classification_heads = nn.ModuleDict()
         if hasattr(self.encoder, "dictionary"):
             self.eos: int = self.encoder.dictionary.eos()
-
-    def get_masked_targets(self, sample):
-        """Get targets from either the sample or the net's output."""
-        return sample["masked_source"]
 
     @classmethod
     def build_model(cls, args, task):
@@ -99,6 +95,7 @@ class PALMModel(TransformerModel):
             )
 
         assert encoder_embed_tokens == decoder_embed_tokens
+
         encoder = PALMEncoder(args, src_dict, encoder_embed_tokens)
         decoder = PALMDecoder(args, tgt_dict, decoder_embed_tokens)
 
@@ -114,6 +111,15 @@ class PALMModel(TransformerModel):
             metavar="D",
             help="dropout probability in the masked_lm pooler layers",
         )
+
+        parser.add_argument(
+            "--tokens-per-sample",
+            default=1024,
+            type=int,
+            help="max number of total tokens over all segments "
+            "per sample for BERT dataset",
+        )
+
         # parser.add_argument(
         #     "--pooler-activation-fn",
         #     choices=utils.get_available_activation_fns(),
@@ -125,12 +131,6 @@ class PALMModel(TransformerModel):
         #     help="Apply spectral normalization on the classification head",
         # )
 
-        # parser.add_argument('--copy-attention', default=False, action='store_true',
-        #                     help='train transformer decoder with copy attention')
-        # parser.add_argument('--copy-attention-heads', type=int, metavar='N', default=1,
-        #                     help='num copy layer attention heads')
-        # parser.add_argument('--copy-attention-dropout', type=float, metavar='D', default=0.,
-        #                     help='num copy layer attention dropout')
         parser.add_argument('--alignment-heads', type=int, metavar='N',
                             help='number of attention heads to be used for '
                                  'pointing')
@@ -163,15 +163,20 @@ class PALMModel(TransformerModel):
         return_all_hiddens: bool = True,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-        segment_label=None,
+        # segment_label=None,
     ):
         # if classification_head_name is not None:
         #     features_only = True
 
-        # PALM Encoder
-        encoder_out = self.encoder(
-            src_tokens, segment_label, masked_tokens
-        )
+        if False:
+            encoder_out = self.encoder(
+                src_tokens, src_lengths
+            )
+        else:
+            # PALM Encoder
+            encoder_out = self.encoder(
+                src_tokens, src_lengths, masked_tokens
+            )
 
         x, extra = self.decoder(
             prev_output_tokens,
@@ -366,211 +371,6 @@ class PALMModel(TransformerModel):
                     logger.info("Overwriting", prefix +
                                 "classification_heads." + k)
                     state_dict[prefix + "classification_heads." + k] = v
-
-
-class PALMEncoder(FairseqEncoder):
-    """
-    Encoder for Masked Language Modelling.
-    """
-
-    def __init__(self, args, dictionary, embed_tokens):
-        super().__init__(dictionary)
-        self.padding_idx = dictionary.pad()
-        self.vocab_size = dictionary.__len__()
-        self.max_source_positions = args.max_positions
-        self.sentence_encoder = TransformerSentenceEncoder(
-            padding_idx=self.padding_idx,
-            vocab_size=self.vocab_size,
-            num_encoder_layers=args.encoder_layers,
-            embedding_dim=args.encoder_embed_dim,
-            ffn_embedding_dim=args.encoder_ffn_embed_dim,
-            num_attention_heads=args.encoder_attention_heads,
-            dropout=args.dropout,
-            attention_dropout=args.attention_dropout,
-            activation_dropout=args.act_dropout,
-            max_seq_len=self.max_source_positions,
-            # num_segments=args.num_segment,
-            use_position_embeddings=not args.no_token_positional_embeddings,
-            encoder_normalize_before=args.encoder_normalize_before,
-            apply_bert_init=args.apply_bert_init,
-            activation_fn=args.activation_fn,
-            learned_pos_embedding=args.encoder_learned_pos,
-        )
-
-        self.share_input_output_embed = args.share_encoder_input_output_embed
-        self.embed_out = None
-        # self.sentence_projection_layer = None
-        # self.sentence_out_dim = args.sentence_class_num
-        self.lm_output_learned_bias = None
-
-        # Remove head is set to true during fine-tuning
-        self.load_softmax = not getattr(args, "remove_head", False)
-
-        self.masked_lm_pooler = nn.Linear(
-            args.encoder_embed_dim, args.encoder_embed_dim
-        )
-        self.pooler_activation = utils.get_activation_fn(
-            args.pooler_activation_fn)
-
-        self.lm_head_transform_weight = nn.Linear(
-            args.encoder_embed_dim, args.encoder_embed_dim
-        )
-        self.activation_fn = utils.get_activation_fn(args.activation_fn)
-        self.layer_norm = LayerNorm(args.encoder_embed_dim)
-
-        self.lm_output_learned_bias = None
-        if self.load_softmax:
-            self.lm_output_learned_bias = nn.Parameter(
-                torch.zeros(self.vocab_size))
-
-            if not self.share_input_output_embed:
-                self.embed_out = nn.Linear(
-                    args.encoder_embed_dim, self.vocab_size, bias=False
-                )
-
-            # if args.sent_loss:
-            #     self.sentence_projection_layer = nn.Linear(
-            #         args.encoder_embed_dim, self.sentence_out_dim, bias=False
-            #     )
-
-    def forward(self, src_tokens, segment_labels=None, masked_tokens=None, **unused):
-        """
-        Forward pass for Masked LM encoder. This first computes the token
-        embedding using the token embedding matrix, position embeddings (if
-        specified) and segment embeddings (if specified).
-
-        Here we assume that the sentence representation corresponds to the
-        output of the classification_token (see bert_task or cross_lingual_lm
-        task for more details).
-        Args:
-            - src_tokens: B x T matrix representing sentences
-            - segment_labels: B x T matrix representing segment label for tokens
-        Returns:
-            - a tuple of the following:
-                - logits for predictions in format B x T x C to be used in
-                  softmax afterwards
-                - a dictionary of additional data, where 'pooled_output' contains
-                  the representation for classification_token and 'inner_states'
-                  is a list of internal model states used to compute the
-                  predictions (similar in ELMO). 'sentence_logits'
-                  is the prediction logit for NSP task and is only computed if
-                  this is specified in the input arguments.
-        """
-        encoder_padding_mask = src_tokens.eq(self.padding_idx)
-        inner_states, sentence_rep = self.sentence_encoder(
-            src_tokens,
-            segment_labels=segment_labels,
-        )
-        x = inner_states[-1].transpose(0, 1)
-
-        # Keep original tokens
-        encoder_out = self.layer_norm(self.activation_fn(
-            self.lm_head_transform_weight(x)))
-
-        # project masked tokens only
-        if masked_tokens is not None:
-            x = x[masked_tokens, :]
-
-        x = self.layer_norm(self.activation_fn(
-            self.lm_head_transform_weight(x)))
-
-        pooled_output = self.pooler_activation(
-            self.masked_lm_pooler(sentence_rep))
-
-        # project back to size of vocabulary
-        if self.share_input_output_embed and hasattr(
-            self.sentence_encoder.embed_tokens, "weight"
-        ):
-            x = F.linear(x, self.sentence_encoder.embed_tokens.weight)
-        elif self.embed_out is not None:
-            x = self.embed_out(x)
-        if self.lm_output_learned_bias is not None:
-            x = x + self.lm_output_learned_bias
-        # sentence_logits = None
-        # if self.sentence_projection_layer:
-        #     sentence_logits = self.sentence_projection_layer(pooled_output)
-
-        return {
-            "encoder_out": [encoder_out],
-            "masked_out": x,
-            "inner_states": inner_states,
-            "pooled_output": pooled_output,
-            # "sentence_logits": sentence_logits,
-            "encoder_padding_mask": [encoder_padding_mask],
-            "src_tokens": [src_tokens],  # B x T
-        }
-
-    def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
-        """
-        Reorder encoder output according to *new_order*.
-        Args:
-            encoder_out: output from the ``forward()`` method
-            new_order (LongTensor): desired order
-        Returns:
-            *encoder_out* rearranged according to *new_order*
-        """
-        if len(encoder_out["encoder_out"]) == 0:
-            new_encoder_out = []
-        else:
-            new_encoder_out = [encoder_out["encoder_out"]
-                               [0].index_select(0, new_order)]
-        if len(encoder_out["encoder_padding_mask"]) == 0:
-            new_encoder_padding_mask = []
-        else:
-            new_encoder_padding_mask = [
-                encoder_out["encoder_padding_mask"][0].index_select(
-                    0, new_order)
-            ]
-        if len(encoder_out["masked_out"]) == 0:
-             new_masked_out = None
-        else:
-            new_masked_out = encoder_out["masked_out"][0].index_select(0, new_order)
-            
-        if len(encoder_out["src_tokens"]) == 0:
-            src_tokens = []
-        else:
-            src_tokens = [(encoder_out["src_tokens"][0]
-                           ).index_select(0, new_order)]
-        # if len(encoder_out["src_lengths"]) == 0:
-        #     src_lengths = []
-        # else:
-        #     src_lengths = [(encoder_out["src_lengths"][0]
-        #                     ).index_select(0, new_order)]
-
-        # encoder_states = encoder_out["encoder_states"]
-        # if len(encoder_states) > 0:
-        #     for idx, state in enumerate(encoder_states):
-        #         encoder_states[idx] = state.index_select(1, new_order)
-
-        return {
-            "encoder_out": new_encoder_out,  # T x B x C
-            "encoder_padding_mask": new_encoder_padding_mask,  # B x T
-            "masked_out": new_masked_out,
-            # "encoder_states": encoder_states,  # List[T x B x C]
-            "src_tokens": src_tokens,  # B x T
-            # "src_lengths": src_lengths,  # B x 1
-        }
-
-    def max_positions(self):
-        """Maximum output length supported by the encoder."""
-        return self.max_source_positions
-
-    def upgrade_state_dict_named(self, state_dict, name):
-        if isinstance(
-            self.sentence_encoder.embed_positions, SinusoidalPositionalEmbedding
-        ):
-            state_dict[
-                name + ".sentence_encoder.embed_positions._float_tensor"
-            ] = torch.FloatTensor(1)
-        if not self.load_softmax:
-            for k in list(state_dict.keys()):
-                if (
-                    "embed_out.weight" in k
-                    or "sentence_projection_layer.weight" in k
-                    or "lm_output_learned_bias" in k
-                ):
-                    del state_dict[k]
-        return state_dict
 
 
 class PALMDecoder(TransformerDecoder):
@@ -899,7 +699,10 @@ class PALMDecoder(TransformerDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": [attn], "inner_states": inner_states, "masked_out": encoder_out['masked_out']}
+        if False:
+            return x, {"attn": [attn], "inner_states": inner_states}
+        else:
+            return x, {"attn": [attn], "inner_states": inner_states, "masked_encoder_out": encoder_out['masked_encoder_out']}
 
     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
         """
@@ -1023,36 +826,59 @@ class PALMDecoder(TransformerDecoder):
 
         return state_dict
 
+class PALMEncoder(TransformerEncoder):
+    """
+    Transformer encoder consisting of *args.encoder_layers* layers. Each layer
+    is a :class:`TransformerEncoderLayer`. The pointer-generator variant adds
+    the source tokens to the encoder output as these are otherwise not passed
+    to the decoder.
+    """
 
-# class PALMClassificationHead(nn.Module):
-#     """Head for sentence-level classification tasks."""
+    def forward(self, src_tokens, src_lengths, masked_tokens, **kwargs):
+        """
+        Runs the `forward()` method of the parent Transformer class. Then adds
+        the source tokens into the encoder output tuple.
+        While it might be more elegant that the model would pass the source
+        tokens to the `forward()` method of the decoder too, this would require
+        changes to `SequenceGenerator`.
+        Args:
+            src_tokens (torch.LongTensor): tokens in the source language of
+                shape `(batch, src_len)`
+            src_lengths (torch.LongTensor): lengths of each source sentence of
+                shape `(batch)`
+        Returns:
+            namedtuple:
+                - **encoder_out** (Tensor): the last encoder layer's output of
+                  shape `(src_len, batch, embed_dim)`
+                - **encoder_padding_mask** (ByteTensor): the positions of
+                  padding elements of shape `(batch, src_len)`
+                - **encoder_embedding** (Tensor): the (scaled) embedding lookup
+                  of shape `(batch, src_len, embed_dim)`
+                - **encoder_states** (List[Tensor]): all intermediate
+                  hidden states of shape `(src_len, batch, embed_dim)`.
+                  Only populated if *return_all_hiddens* is True.
+                - **src_tokens** (Tensor): input token ids of shape
+                  `(batch, src_len)`
+        """
+        encoder_out = super().forward(src_tokens, src_lengths, **kwargs)
 
-#     def __init__(
-#         self,
-#         input_dim,
-#         inner_dim,
-#         num_classes,
-#         activation_fn,
-#         pooler_dropout,
-#         do_spectral_norm=False,
-#     ):
-#         super().__init__()
-#         self.dense = nn.Linear(input_dim, inner_dim)
-#         self.activation_fn = utils.get_activation_fn(activation_fn)
-#         self.dropout = nn.Dropout(p=pooler_dropout)
-#         self.out_proj = nn.Linear(inner_dim, num_classes)
+        masked_encoder_out = None
+        # project masked tokens
+        if  masked_tokens is not None:
+            x = encoder_out["encoder_out"][0].transpose(0, 1)
+            x = x[masked_tokens, :]
+            # project back to size of vocabulary, self.share_input_output_embed and hasattr(self.embed_tokens, "weight")
+            masked_encoder_out = F.linear(x, self.embed_tokens.weight)
 
-#         if do_spectral_norm:
-#             self.out_proj = torch.nn.utils.spectral_norm(self.out_proj)
-
-#     def forward(self, features, **kwargs):
-#         x = features
-#         x = self.dropout(x)
-#         x = self.dense(x)
-#         x = self.activation_fn(x)
-#         x = self.dropout(x)
-#         x = self.out_proj(x)
-#         return x
+        return {
+            "encoder_out": encoder_out["encoder_out"],  # T x B x C
+            "encoder_padding_mask": encoder_out["encoder_padding_mask"],
+            "encoder_embedding": encoder_out["encoder_embedding"],  # B x T x C
+            "encoder_states": encoder_out["encoder_states"],  # List[T x B x C]
+            "src_tokens": [src_tokens],  # B x T
+            "src_lengths": [],
+            'masked_encoder_out': [masked_encoder_out], # B x T
+        }
 
 
 @register_model_architecture("palm", "palm_large")
@@ -1106,14 +932,10 @@ def palm_large_architecture(args):
 
     args.adaptive_input = getattr(args, "adaptive_input", False)
 
-    # args.copy_attention_heads = getattr(args, 'copy_attention_heads', 1)
-    # args.copy_attention_dropout = getattr(args, 'copy_attention_dropout', 0.)
-
     args.alignment_heads = getattr(args, "alignment_heads", 1)
     args.alignment_layer = getattr(args, "alignment_layer", -1)
     if args.alignment_layer < 0:
         args.alignment_layer = args.decoder_layers + args.alignment_layer
-
 
 @register_model_architecture("palm", "palm_base")
 def palm_base_architecture(args):
@@ -1143,3 +965,243 @@ def mpalm_base_architecture(args):
 def mpalm_base_wmt20_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     mpalm_base_architecture(args)
+
+
+
+
+
+
+# class PALMClassificationHead(nn.Module):
+#     """Head for sentence-level classification tasks."""
+
+#     def __init__(
+#         self,
+#         input_dim,
+#         inner_dim,
+#         num_classes,
+#         activation_fn,
+#         pooler_dropout,
+#         do_spectral_norm=False,
+#     ):
+#         super().__init__()
+#         self.dense = nn.Linear(input_dim, inner_dim)
+#         self.activation_fn = utils.get_activation_fn(activation_fn)
+#         self.dropout = nn.Dropout(p=pooler_dropout)
+#         self.out_proj = nn.Linear(inner_dim, num_classes)
+
+#         if do_spectral_norm:
+#             self.out_proj = torch.nn.utils.spectral_norm(self.out_proj)
+
+#     def forward(self, features, **kwargs):
+#         x = features
+#         x = self.dropout(x)
+#         x = self.dense(x)
+#         x = self.activation_fn(x)
+#         x = self.dropout(x)
+#         x = self.out_proj(x)
+#         return x
+
+
+# class PALMEncoder(FairseqEncoder):
+#     """
+#     Encoder for Masked Language Modelling.
+#     """
+
+#     def __init__(self, args, dictionary, embed_tokens):
+#         super().__init__(dictionary)
+#         self.padding_idx = dictionary.pad()
+#         self.vocab_size = dictionary.__len__()
+#         self.max_source_positions = args.max_positions
+#         self.sentence_encoder = TransformerSentenceEncoder(
+#             padding_idx=self.padding_idx,
+#             vocab_size=self.vocab_size,
+#             num_encoder_layers=args.encoder_layers,
+#             embedding_dim=args.encoder_embed_dim,
+#             ffn_embedding_dim=args.encoder_ffn_embed_dim,
+#             num_attention_heads=args.encoder_attention_heads,
+#             dropout=args.dropout,
+#             attention_dropout=args.attention_dropout,
+#             activation_dropout=args.act_dropout,
+#             max_seq_len=self.max_source_positions,
+#             # num_segments=args.num_segment,
+#             use_position_embeddings=not args.no_token_positional_embeddings,
+#             encoder_normalize_before=args.encoder_normalize_before,
+#             apply_bert_init=args.apply_bert_init,
+#             activation_fn=args.activation_fn,
+#             learned_pos_embedding=args.encoder_learned_pos,
+#         )
+
+#         self.share_input_output_embed = args.share_encoder_input_output_embed
+#         self.embed_out = None
+#         # self.sentence_projection_layer = None
+#         # self.sentence_out_dim = args.sentence_class_num
+#         self.lm_output_learned_bias = None
+
+#         # Remove head is set to true during fine-tuning
+#         self.load_softmax = not getattr(args, "remove_head", False)
+
+#         self.masked_lm_pooler = nn.Linear(
+#             args.encoder_embed_dim, args.encoder_embed_dim
+#         )
+#         self.pooler_activation = utils.get_activation_fn(
+#             args.pooler_activation_fn)
+
+#         self.lm_head_transform_weight = nn.Linear(
+#             args.encoder_embed_dim, args.encoder_embed_dim
+#         )
+#         self.activation_fn = utils.get_activation_fn(args.activation_fn)
+#         self.layer_norm = LayerNorm(args.encoder_embed_dim)
+
+#         self.lm_output_learned_bias = None
+#         if self.load_softmax:
+#             self.lm_output_learned_bias = nn.Parameter(
+#                 torch.zeros(self.vocab_size))
+
+#             if not self.share_input_output_embed:
+#                 self.embed_out = nn.Linear(
+#                     args.encoder_embed_dim, self.vocab_size, bias=False
+#                 )
+
+#             # if args.sent_loss:
+#             #     self.sentence_projection_layer = nn.Linear(
+#             #         args.encoder_embed_dim, self.sentence_out_dim, bias=False
+#             #     )
+
+#     def forward(self, src_tokens, segment_labels=None, masked_tokens=None, **unused):
+#         """
+#         Forward pass for Masked LM encoder. This first computes the token
+#         embedding using the token embedding matrix, position embeddings (if
+#         specified) and segment embeddings (if specified).
+
+#         Here we assume that the sentence representation corresponds to the
+#         output of the classification_token (see bert_task or cross_lingual_lm
+#         task for more details).
+#         Args:
+#             - src_tokens: B x T matrix representing sentences
+#             - segment_labels: B x T matrix representing segment label for tokens
+#         Returns:
+#             - a tuple of the following:
+#                 - logits for predictions in format B x T x C to be used in
+#                   softmax afterwards
+#                 - a dictionary of additional data, where 'pooled_output' contains
+#                   the representation for classification_token and 'inner_states'
+#                   is a list of internal model states used to compute the
+#                   predictions (similar in ELMO). 'sentence_logits'
+#                   is the prediction logit for NSP task and is only computed if
+#                   this is specified in the input arguments.
+#         """
+#         encoder_padding_mask = src_tokens.eq(self.padding_idx)
+#         inner_states, sentence_rep = self.sentence_encoder(
+#             src_tokens,
+#             segment_labels=segment_labels,
+#         )
+#         x = inner_states[-1].transpose(0, 1)
+
+#         # Keep original tokens
+#         encoder_out = self.layer_norm(self.activation_fn(
+#             self.lm_head_transform_weight(x)))
+
+#         # project masked tokens only
+#         if masked_tokens is not None:
+#             x = x[masked_tokens, :]
+
+#         x = self.layer_norm(self.activation_fn(
+#             self.lm_head_transform_weight(x)))
+
+#         # pooled_output = self.pooler_activation(
+#         #     self.masked_lm_pooler(sentence_rep))
+
+#         # project back to size of vocabulary
+#         if self.share_input_output_embed and hasattr(
+#             self.sentence_encoder.embed_tokens, "weight"
+#         ):
+#             x = F.linear(x, self.sentence_encoder.embed_tokens.weight)
+#         elif self.embed_out is not None:
+#             x = self.embed_out(x)
+#         if self.lm_output_learned_bias is not None:
+#             x = x + self.lm_output_learned_bias
+#         # sentence_logits = None
+#         # if self.sentence_projection_layer:
+#         #     sentence_logits = self.sentence_projection_layer(pooled_output)
+
+#         return {
+#             "encoder_out": [encoder_out],
+#             "masked_out": x,
+#             "inner_states": inner_states,
+#             # "pooled_output": pooled_output,
+#             # "sentence_logits": sentence_logits,
+#             "encoder_padding_mask": [encoder_padding_mask],
+#             "src_tokens": [src_tokens],  # B x T
+#         }
+
+#     def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
+#         """
+#         Reorder encoder output according to *new_order*.
+#         Args:
+#             encoder_out: output from the ``forward()`` method
+#             new_order (LongTensor): desired order
+#         Returns:
+#             *encoder_out* rearranged according to *new_order*
+#         """
+#         if len(encoder_out["encoder_out"]) == 0:
+#             new_encoder_out = []
+#         else:
+#             new_encoder_out = [encoder_out["encoder_out"]
+#                                [0].index_select(0, new_order)]
+#         if len(encoder_out["encoder_padding_mask"]) == 0:
+#             new_encoder_padding_mask = []
+#         else:
+#             new_encoder_padding_mask = [
+#                 encoder_out["encoder_padding_mask"][0].index_select(
+#                     0, new_order)
+#             ]
+#         if len(encoder_out["masked_out"]) == 0:
+#              new_masked_out = None
+#         else:
+#             new_masked_out = encoder_out["masked_out"][0].index_select(0, new_order)
+
+#         if len(encoder_out["src_tokens"]) == 0:
+#             src_tokens = []
+#         else:
+#             src_tokens = [(encoder_out["src_tokens"][0]
+#                            ).index_select(0, new_order)]
+#         # if len(encoder_out["src_lengths"]) == 0:
+#         #     src_lengths = []
+#         # else:
+#         #     src_lengths = [(encoder_out["src_lengths"][0]
+#         #                     ).index_select(0, new_order)]
+
+#         # encoder_states = encoder_out["encoder_states"]
+#         # if len(encoder_states) > 0:
+#         #     for idx, state in enumerate(encoder_states):
+#         #         encoder_states[idx] = state.index_select(1, new_order)
+
+#         return {
+#             "encoder_out": new_encoder_out,  # T x B x C
+#             "encoder_padding_mask": new_encoder_padding_mask,  # B x T
+#             "masked_out": new_masked_out,
+#             # "encoder_states": encoder_states,  # List[T x B x C]
+#             "src_tokens": src_tokens,  # B x T
+#             # "src_lengths": src_lengths,  # B x 1
+#         }
+
+#     def max_positions(self):
+#         """Maximum output length supported by the encoder."""
+#         return self.max_source_positions
+
+#     def upgrade_state_dict_named(self, state_dict, name):
+#         if isinstance(
+#             self.sentence_encoder.embed_positions, SinusoidalPositionalEmbedding
+#         ):
+#             state_dict[
+#                 name + ".sentence_encoder.embed_positions._float_tensor"
+#             ] = torch.FloatTensor(1)
+#         if not self.load_softmax:
+#             for k in list(state_dict.keys()):
+#                 if (
+#                     "embed_out.weight" in k
+#                     or "sentence_projection_layer.weight" in k
+#                     or "lm_output_learned_bias" in k
+#                 ):
+#                     del state_dict[k]
+#         return state_dict

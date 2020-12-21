@@ -1,11 +1,11 @@
-total_updates=20000
+total_updates=200000
 warmup_updates=500
 lr=0.001
 max_tokens=4096
 update_freq=4
 pointer_layer=-2
 
-CUDA_VISIBLE_DEVICES=0 fairseq-train /datadrive/cnn_dm_bin \
+CUDA_VISIBLE_DEVICES=1 fairseq-train /datadrive/cnn_dm_bin \
     --user-dir ~/fairseq/examples/pointer_generator/pointer_generator_src \
     --max-tokens "$max_tokens" \
     --task translation \
@@ -27,4 +27,8 @@ CUDA_VISIBLE_DEVICES=0 fairseq-train /datadrive/cnn_dm_bin \
     --clip-norm 0.1 \
     --lr-scheduler inverse_sqrt --lr "$lr" --max-update "$total_updates" --warmup-updates "$warmup_updates" \
     --update-freq "$update_freq" \
+    --keep-last-epochs -1 \
+    --keep-best-checkpoints -1 \
+    --no-epoch-checkpoints \
+    --best-checkpoint-metric loss \
     --skip-invalid-size-inputs-valid-test --save-dir /bigdata/pgen_checkpoints --tensorboard-logdir /bigdata/logdir/pgen

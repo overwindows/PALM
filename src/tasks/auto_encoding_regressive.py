@@ -159,7 +159,6 @@ def load_langpair_dataset(
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
-    print(mask_prob, leave_unmasked_prob, random_token_prob)
     # mask source dataset.
     src_dataset, masked_src_dataset = MaskTokensDataset.apply_mask(
         src_dataset,
@@ -177,8 +176,8 @@ def load_langpair_dataset(
     )
     
     # Print samples.
-    print(src_dataset[-1])
-    print(masked_src_dataset[-1])
+    # print(src_dataset[-1])
+    # print(masked_src_dataset[-1])
 
     return LanguagePairDataset(
         src_dataset,
@@ -274,13 +273,6 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         parser.add_argument('--eval-bleu-print-samples', action='store_true',
                             help='print sample generations during validation')
         # fmt: on
-        parser.add_argument(
-            "--tokens-per-sample",
-            default=1024,
-            type=int,
-            help="max number of total tokens over all segments "
-            "per sample for BERT dataset",
-        )
         # parser.add_argument(
         #     "--sent-loss",
         #     action="store_true",

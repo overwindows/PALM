@@ -1,13 +1,13 @@
 DATA_BIN=/datadrive/cnn_dm_bin
-EXP_NAME=exp01
-total_updates=20000
+EXP_NAME=debug
+total_updates=200000
 warmup_updates=500
 lr=0.001
 max_tokens=4096
 update_freq=4
 pointer_layer=-2
 
-CUDA_VISIBLE_DEVICES=1 python -m utils.train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=0 python -m utils.train $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
 --task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
 --share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \
@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train $DATA_BIN \
 --decoder-normalize-before \
 --update-freq 4 --source-position-markers 1000 \
 --train-subset train \
---valid-subset valid --eval-bleu \
+--valid-subset valid \
 --validate-interval 1 \
 --max-tokens-valid 2048 \
 --keep-interval-updates -1 \
@@ -77,4 +77,3 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train $DATA_BIN \
 # --pooler-activation-fn tanh
 # --tensorboard-logdir /bigdata/logdir/debug
 # --eval-bleu \
-
