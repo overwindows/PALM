@@ -120,17 +120,6 @@ class PALMModel(TransformerModel):
             "per sample for BERT dataset",
         )
 
-        # parser.add_argument(
-        #     "--pooler-activation-fn",
-        #     choices=utils.get_available_activation_fns(),
-        #     help="activation function to use for pooler layer",
-        # )
-        # parser.add_argument(
-        #     "--spectral-norm-classification-head",
-        #     action="store_true",
-        #     help="Apply spectral normalization on the classification head",
-        # )
-
         parser.add_argument('--alignment-heads', type=int, metavar='N',
                             help='number of attention heads to be used for '
                                  'pointing')
@@ -158,26 +147,23 @@ class PALMModel(TransformerModel):
         masked_tokens=None,
         prev_output_tokens=None,
         features_only: bool = False,
-        # classification_head_name: Optional[str] = None,
         token_embeddings: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = True,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-        # segment_label=None,
     ):
-        # if classification_head_name is not None:
-        #     features_only = True
 
-        if False:
-            encoder_out = self.encoder(
-                src_tokens, src_lengths
-            )
-        else:
-            # PALM Encoder
-            encoder_out = self.encoder(
-                src_tokens, src_lengths, masked_tokens
-            )
+        # if False:
+        #     encoder_out = self.encoder(
+        #         src_tokens, src_lengths
+        #     )
+        # else:
+        # PALM Encoder
+        encoder_out = self.encoder(
+            src_tokens, src_lengths, masked_tokens
+        )
 
+        #PALM Decoder
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -187,16 +173,7 @@ class PALMModel(TransformerModel):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
         )
-        # eos: int = self.eos
-        # if classification_head_name is not None:
-        #     sentence_representation = x[
-        #         src_tokens.eq(eos), :
-        #     ].view(x.size(0), -1, x.size(-1))[:, -1, :]
-        #     for k, head in self.classification_heads.items():
-        #         # for torch script only supports iteration
-        #         if k == classification_head_name:
-        #             x = head(sentence_representation)
-        #             break
+
         return x, extra
 
     @classmethod
@@ -222,32 +199,6 @@ class PALMModel(TransformerModel):
             **kwargs,
         )
         return PALMHubInterface(x["args"], x["task"], x["models"][0])
-
-    # def register_classification_head(
-    #     self, name, num_classes=None, inner_dim=None, **kwargs
-    # ):
-    #     """Register a classification head."""
-    #     logger.info("Registering classification head: {0}".format(name))
-    #     if name in self.classification_heads:
-    #         prev_num_classes = self.classification_heads[name].out_proj.out_features
-    #         prev_inner_dim = self.classification_heads[name].dense.out_features
-    #         if num_classes != prev_num_classes or inner_dim != prev_inner_dim:
-    #             logger.warning(
-    #                 're-registering head "{}" with num_classes {} (prev: {}) '
-    #                 "and inner_dim {} (prev: {})".format(
-    #                     name, num_classes, prev_num_classes, inner_dim, prev_inner_dim
-    #                 )
-    #             )
-    #     self.classification_heads[name] = PALMClassificationHead(
-    #         input_dim=self.args.encoder_embed_dim,
-    #         inner_dim=inner_dim or self.args.encoder_embed_dim,
-    #         num_classes=num_classes,
-    #         activation_fn=self.args.pooler_activation_fn,
-    #         pooler_dropout=self.args.pooler_dropout,
-    #         do_spectral_norm=getattr(
-    #             self.args, "spectral_norm_classification_head", False
-    #         ),
-    #     )
 
     def upgrade_state_dict_named(self, state_dict, name):
         super().upgrade_state_dict_named(state_dict, name)
@@ -306,7 +257,7 @@ class PALMModel(TransformerModel):
 
         # When finetuning on translation task, remove last row of
         # embedding matrix that corresponds to mask_idx token.
-        loaded_dict_size = state_dict["encoder.sentence_encoder.embed_tokens.weight"].size(
+        loaded_dict_size = state_dict["encoder.embed_tokens.weight"].size(
             0)
         if (
             loaded_dict_size == len(self.encoder.dictionary) + 1
@@ -361,16 +312,6 @@ class PALMModel(TransformerModel):
                     loaded_mask_token_embedding.unsqueeze(0),
                 ]
             )
-
-        # Copy any newly-added classification heads into the state dict
-        # with their current weights.
-        if hasattr(self, "classification_heads"):
-            cur_state = self.classification_heads.state_dict()
-            for k, v in cur_state.items():
-                if prefix + "classification_heads." + k not in state_dict:
-                    logger.info("Overwriting", prefix +
-                                "classification_heads." + k)
-                    state_dict[prefix + "classification_heads." + k] = v
 
 
 class PALMDecoder(TransformerDecoder):
@@ -699,10 +640,7 @@ class PALMDecoder(TransformerDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        if False:
-            return x, {"attn": [attn], "inner_states": inner_states}
-        else:
-            return x, {"attn": [attn], "inner_states": inner_states, "masked_encoder_out": encoder_out['masked_encoder_out']}
+        return x, {"attn": [attn], "inner_states": inner_states, "masked_encoder_out": encoder_out['masked_encoder_out']}
 
     def output_layer(self, features, attn, src_tokens, p_gens, **kwargs):
         """
@@ -826,6 +764,7 @@ class PALMDecoder(TransformerDecoder):
 
         return state_dict
 
+
 class PALMEncoder(TransformerEncoder):
     """
     Transformer encoder consisting of *args.encoder_layers* layers. Each layer
@@ -834,7 +773,7 @@ class PALMEncoder(TransformerEncoder):
     to the decoder.
     """
 
-    def forward(self, src_tokens, src_lengths, masked_tokens, **kwargs):
+    def forward(self, src_tokens, src_lengths, masked_tokens = None, **kwargs):
         """
         Runs the `forward()` method of the parent Transformer class. Then adds
         the source tokens into the encoder output tuple.
@@ -864,7 +803,7 @@ class PALMEncoder(TransformerEncoder):
 
         masked_encoder_out = None
         # project masked tokens
-        if  masked_tokens is not None:
+        if masked_tokens is not None:
             x = encoder_out["encoder_out"][0].transpose(0, 1)
             x = x[masked_tokens, :]
             # project back to size of vocabulary, self.share_input_output_embed and hasattr(self.embed_tokens, "weight")
@@ -877,7 +816,58 @@ class PALMEncoder(TransformerEncoder):
             "encoder_states": encoder_out["encoder_states"],  # List[T x B x C]
             "src_tokens": [src_tokens],  # B x T
             "src_lengths": [],
-            'masked_encoder_out': [masked_encoder_out], # B x T
+            'masked_encoder_out': [masked_encoder_out] if masked_tokens is not None else [],  # B x T
+        }
+    
+    def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
+        """
+        Reorder encoder output according to *new_order*.
+        Args:
+            encoder_out: output from the ``forward()`` method
+            new_order (LongTensor): desired order
+        Returns:
+            *encoder_out* rearranged according to *new_order*
+        """
+        if len(encoder_out["encoder_out"]) == 0:
+            new_encoder_out = []
+        else:
+            new_encoder_out = [encoder_out["encoder_out"]
+                            [0].index_select(1, new_order)]
+        if len(encoder_out["encoder_padding_mask"]) == 0:
+            new_encoder_padding_mask = []
+        else:
+            new_encoder_padding_mask = [
+                encoder_out["encoder_padding_mask"][0].index_select(
+                    0, new_order)
+            ]
+        if len(encoder_out["masked_encoder_out"]) == 0:
+            new_masked_out = []
+        else:
+            new_masked_out = [encoder_out["masked_encoder_out"][0].index_select(0, new_order)]
+
+        if len(encoder_out["src_tokens"]) == 0:
+            src_tokens = []
+        else:
+            src_tokens = [(encoder_out["src_tokens"][0]
+                        ).index_select(0, new_order)]
+        # if len(encoder_out["src_lengths"]) == 0:
+        #     src_lengths = []
+        # else:
+        #     src_lengths = [(encoder_out["src_lengths"][0]
+        #                     ).index_select(0, new_order)]
+
+        # encoder_states = encoder_out["encoder_states"]
+        # if len(encoder_states) > 0:
+        #     for idx, state in enumerate(encoder_states):
+        #         encoder_states[idx] = state.index_select(1, new_order)
+        # print(new_encoder_out[0].size(), new_encoder_padding_mask[0].size())
+        return {
+            "encoder_out": new_encoder_out,  # T x B x C
+            "encoder_padding_mask": new_encoder_padding_mask,  # B x T
+            "masked_encoder_out": new_masked_out,
+            # "encoder_states": encoder_states,  # List[T x B x C]
+            "src_tokens": src_tokens,  # B x T
+            # "src_lengths": src_lengths,  # B x 1
         }
 
 
@@ -937,6 +927,7 @@ def palm_large_architecture(args):
     if args.alignment_layer < 0:
         args.alignment_layer = args.decoder_layers + args.alignment_layer
 
+
 @register_model_architecture("palm", "palm_base")
 def palm_base_architecture(args):
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 768)
@@ -965,10 +956,6 @@ def mpalm_base_architecture(args):
 def mpalm_base_wmt20_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     mpalm_base_architecture(args)
-
-
-
-
 
 
 # class PALMClassificationHead(nn.Module):
@@ -1134,56 +1121,7 @@ def mpalm_base_wmt20_architecture(args):
 #             "src_tokens": [src_tokens],  # B x T
 #         }
 
-#     def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
-#         """
-#         Reorder encoder output according to *new_order*.
-#         Args:
-#             encoder_out: output from the ``forward()`` method
-#             new_order (LongTensor): desired order
-#         Returns:
-#             *encoder_out* rearranged according to *new_order*
-#         """
-#         if len(encoder_out["encoder_out"]) == 0:
-#             new_encoder_out = []
-#         else:
-#             new_encoder_out = [encoder_out["encoder_out"]
-#                                [0].index_select(0, new_order)]
-#         if len(encoder_out["encoder_padding_mask"]) == 0:
-#             new_encoder_padding_mask = []
-#         else:
-#             new_encoder_padding_mask = [
-#                 encoder_out["encoder_padding_mask"][0].index_select(
-#                     0, new_order)
-#             ]
-#         if len(encoder_out["masked_out"]) == 0:
-#              new_masked_out = None
-#         else:
-#             new_masked_out = encoder_out["masked_out"][0].index_select(0, new_order)
 
-#         if len(encoder_out["src_tokens"]) == 0:
-#             src_tokens = []
-#         else:
-#             src_tokens = [(encoder_out["src_tokens"][0]
-#                            ).index_select(0, new_order)]
-#         # if len(encoder_out["src_lengths"]) == 0:
-#         #     src_lengths = []
-#         # else:
-#         #     src_lengths = [(encoder_out["src_lengths"][0]
-#         #                     ).index_select(0, new_order)]
-
-#         # encoder_states = encoder_out["encoder_states"]
-#         # if len(encoder_states) > 0:
-#         #     for idx, state in enumerate(encoder_states):
-#         #         encoder_states[idx] = state.index_select(1, new_order)
-
-#         return {
-#             "encoder_out": new_encoder_out,  # T x B x C
-#             "encoder_padding_mask": new_encoder_padding_mask,  # B x T
-#             "masked_out": new_masked_out,
-#             # "encoder_states": encoder_states,  # List[T x B x C]
-#             "src_tokens": src_tokens,  # B x T
-#             # "src_lengths": src_lengths,  # B x 1
-#         }
 
 #     def max_positions(self):
 #         """Maximum output length supported by the encoder."""

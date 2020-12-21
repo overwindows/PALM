@@ -1,12 +1,12 @@
 DATA_BIN=/datadrive/cnn_dm_bin
 
-CUDA_VISIBLE_DEVICES=0 python -m utils.validate $DATA_BIN \
+CUDA_VISIBLE_DEVICES=1 python -m utils.validate $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
 --task auto_encoding_regressive --criterion label_smoothed_cross_entropy_with_masked_lm \
 --skip-invalid-size-inputs-valid-test \
 --max-tokens 2048 --required-batch-size-multiple 1 \
 --valid-subset valid \
---eval-bleu --eval-bleu-args '{"beam": 1, "max_len_a": 1.2, "max_len_b": 10}' \
+--eval-bleu \
 --max-tokens-valid 2048 \
 --path /bigdata/debug_checkpoints/checkpoint_best.pt
 
@@ -15,3 +15,5 @@ CUDA_VISIBLE_DEVICES=0 python -m utils.validate $DATA_BIN \
 # --lr-scheduler polynomial_decay --total-num-update 20000 --warmup-updates 500 --label-smoothing 0.1 \
 # --eval-bleu-print-samples \
 # --validate-interval 1 \
+# --eval-bleu-args '{"beam": 1, "max_len_a": 1.2, "max_len_b": 10}' \
+ 
