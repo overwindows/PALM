@@ -37,7 +37,7 @@ CUDA_VISIBLE_DEVICES=0 python -m utils.train $DATA_BIN \
 --no-epoch-checkpoints \
 --best-checkpoint-metric loss \
 --save-dir /bigdata/"$EXP_NAME"_checkpoints \
---reset-optimizer --reset-meters --reset-dataloader --tensorboard-logdir /bigdata/logdir/$EXP_NAME
+--tensorboard-logdir /bigdata/logdir/$EXP_NAME
 
 # --sample-break-mode complete_doc \
 # --mask 0.3 \
@@ -77,3 +77,4 @@ CUDA_VISIBLE_DEVICES=0 python -m utils.train $DATA_BIN \
 # --pooler-activation-fn tanh
 # --tensorboard-logdir /bigdata/logdir/debug
 # --eval-bleu \
+# --reset-optimizer --reset-meters --reset-dataloader 

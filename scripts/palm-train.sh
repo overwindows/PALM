@@ -1,12 +1,14 @@
-TOTAL_NUM_UPDATES=20000  
-WARMUP_UPDATES=500      
-LR=3e-05
-MAX_TOKENS=2048
+total_updates=200000
+warmup_updates=500      
+lr=3e-05
+max_tokens=4096
 UPDATE_FREQ=4
+pointer_layer=-2
+roberta_path=/bigdata/roberta.base/model.pt
 
-CUDA_VISIBLE_DEVICES=2 fairseq-train /datadrive/cnn_dm_bin \
+CUDA_VISIBLE_DEVICES=1 python -m utils.train /datadrive/cnn_dm_bin \
     --user-dir src \
-    --max-tokens $MAX_TOKENS \
+    --max-tokens $max_tokens \
     --task auto_encoding_regressive \
     --source-lang source --target-lang target \
     --truncate-source \
@@ -16,14 +18,39 @@ CUDA_VISIBLE_DEVICES=2 fairseq-train /datadrive/cnn_dm_bin \
     --reset-optimizer --reset-dataloader --reset-meters \
     --required-batch-size-multiple 1 \
     --arch palm_base \
-    --criterion label_smoothed_cross_entropy_with_masked_lm \
-    --label-smoothing 0.1 \
+    --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
     --dropout 0.1 --attention-dropout 0.1 \
     --weight-decay 0.01 --optimizer adam --adam-betas "(0.9, 0.999)" --adam-eps 1e-08 \
     --clip-norm 0.1 \
-    --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
-    --fp16 --update-freq $UPDATE_FREQ \
+    --eval-bleu \
+    --lr-scheduler inverse_sqrt --lr $lr --max-update $total_updates --warmup-updates $warmup_updates \
+    --update-freq $UPDATE_FREQ \
     --skip-invalid-size-inputs-valid-test \
-    --find-unused-parameters --act-dropout 0.1 --save-dir /bigdata/palm_checkpoints --tensorboard-logdir /bigdata/logdir/palm
+    --alignment-layer "$pointer_layer" \
+    --alignment-heads 1 \
+    --encoder-normalize-before \
+    --decoder-normalize-before \
+    --find-unused-parameters \
+    --keep-interval-updates -1 \
+    --keep-last-epochs -1 \
+    --keep-best-checkpoints -1 \
+    --no-epoch-checkpoints \
+    --best-checkpoint-metric loss \
+    --act-dropout 0.1 --save-dir /bigdata/palm_checkpoints --tensorboard-logdir /bigdata/logdir/palm
 
-    # --restore-file $PALM_PATH \
+    # --source-position-markers 1000 \
+    # --train-subset train \
+    # --valid-subset valid \
+    # --validate-interval 1 \
+    # --max-tokens-valid 2048 \
+    # --fp16 \
+    # --encoder-embed-dim 512 \
+    # --encoder-ffn-embed-dim 2048 \
+    # --encoder-attention-heads 8 \
+    # --decoder-embed-dim 512 \
+    # --decoder-ffn-embed-dim 2048 \
+    # --decoder-attention-heads 8 \
+    # --restore-file $roberta_path \
+
+
+

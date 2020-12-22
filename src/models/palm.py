@@ -9,12 +9,17 @@ from typing import Optional
 import math
 import logging
 from typing import Any, Dict, List, Optional
+from argparse import Namespace
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from fairseq import utils
+from fairseq.dataclass.utils import (
+    convert_namespace_to_omegaconf,
+    gen_parser_from_dataclass,
+)
 from fairseq.models import (
     register_model, register_model_architecture)
 from fairseq.models.transformer import TransformerModel, TransformerDecoder, TransformerEncoder
@@ -26,6 +31,8 @@ from fairseq.modules import (
     TransformerDecoderLayer,
     SinusoidalPositionalEmbedding,
 )
+from fairseq.checkpoint_utils import prune_state_dict
+from omegaconf import DictConfig
 
 from torch import Tensor
 from .hub_interface import PALMHubInterface
@@ -153,17 +160,12 @@ class PALMModel(TransformerModel):
         alignment_heads: Optional[int] = None,
     ):
 
-        # if False:
-        #     encoder_out = self.encoder(
-        #         src_tokens, src_lengths
-        #     )
-        # else:
         # PALM Encoder
         encoder_out = self.encoder(
             src_tokens, src_lengths, masked_tokens
         )
 
-        #PALM Decoder
+        # PALM Decoder
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -200,10 +202,44 @@ class PALMModel(TransformerModel):
         )
         return PALMHubInterface(x["args"], x["task"], x["models"][0])
 
+    def load_state_dict(
+        self,
+        state_dict,
+        strict=True,
+        model_cfg: Optional[DictConfig] = None,
+        args: Optional[Namespace] = None,
+    ):
+        """Copies parameters and buffers from *state_dict* into this module and
+        its descendants.
+
+        Overrides the method in :class:`nn.Module`. Compared with that method
+        this additionally "upgrades" *state_dicts* from old checkpoints.
+        """
+
+        if model_cfg is None and args is not None:
+            logger.warn("using 'args' is deprecated, please update your code to use dataclass config")
+            model_cfg = convert_namespace_to_omegaconf(args).model
+
+        self.upgrade_state_dict(state_dict)
+        new_state_dict = prune_state_dict(state_dict, model_cfg)
+        return super().load_state_dict(new_state_dict, False)
+
+    def upgrade_state_dict(self, state_dict):
+        """Upgrade old state dicts to work with newer code."""
+        self.upgrade_state_dict_named(state_dict, "")
+    
     def upgrade_state_dict_named(self, state_dict, name):
+        prefix = name + "." if name != "" else ""
+
+        # For fairseq roberta model
+        for k in list(state_dict.keys()):
+            if k.startswith(prefix + "decoder"):
+                new_k = prefix + "encoder" + k[len(prefix + "decoder.sentence_encoder") :]
+                state_dict[new_k] = state_dict[k]
+                del state_dict[k]
+
         super().upgrade_state_dict_named(state_dict, name)
 
-        prefix = name + "." if name != "" else ""
         current_head_names = (
             []
             if not hasattr(self, "classification_heads")
@@ -257,6 +293,7 @@ class PALMModel(TransformerModel):
 
         # When finetuning on translation task, remove last row of
         # embedding matrix that corresponds to mask_idx token.
+        print(state_dict.keys())
         loaded_dict_size = state_dict["encoder.embed_tokens.weight"].size(
             0)
         if (
