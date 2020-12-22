@@ -217,7 +217,8 @@ class PALMModel(TransformerModel):
         """
 
         if model_cfg is None and args is not None:
-            logger.warn("using 'args' is deprecated, please update your code to use dataclass config")
+            logger.warn(
+                "using 'args' is deprecated, please update your code to use dataclass config")
             model_cfg = convert_namespace_to_omegaconf(args).model
 
         self.upgrade_state_dict(state_dict)
@@ -227,15 +228,21 @@ class PALMModel(TransformerModel):
     def upgrade_state_dict(self, state_dict):
         """Upgrade old state dicts to work with newer code."""
         self.upgrade_state_dict_named(state_dict, "")
-    
+
     def upgrade_state_dict_named(self, state_dict, name):
         prefix = name + "." if name != "" else ""
 
-        # For fairseq roberta model
+        # Finetune on fairseq roberta model.
         for k in list(state_dict.keys()):
             if k.startswith(prefix + "decoder"):
-                new_k = prefix + "encoder" + k[len(prefix + "decoder.sentence_encoder") :]
-                state_dict[new_k] = state_dict[k]
+                # For encoder
+                new_k_e = prefix + "encoder" + \
+                    k[len(prefix + "decoder.sentence_encoder"):]
+                # For decoder
+                new_k_d = prefix + "decoder" + \
+                    k[len(prefix + "decoder.sentence_encoder"):]
+                state_dict[new_k_e] = state_dict[k]
+                state_dict[new_k_d] = state_dict[k]
                 del state_dict[k]
 
         super().upgrade_state_dict_named(state_dict, name)
@@ -293,7 +300,7 @@ class PALMModel(TransformerModel):
 
         # When finetuning on translation task, remove last row of
         # embedding matrix that corresponds to mask_idx token.
-        print(state_dict.keys())
+        # print(state_dict.keys())
         loaded_dict_size = state_dict["encoder.embed_tokens.weight"].size(
             0)
         if (
@@ -810,7 +817,7 @@ class PALMEncoder(TransformerEncoder):
     to the decoder.
     """
 
-    def forward(self, src_tokens, src_lengths, masked_tokens = None, **kwargs):
+    def forward(self, src_tokens, src_lengths, masked_tokens=None, **kwargs):
         """
         Runs the `forward()` method of the parent Transformer class. Then adds
         the source tokens into the encoder output tuple.
@@ -853,9 +860,10 @@ class PALMEncoder(TransformerEncoder):
             "encoder_states": encoder_out["encoder_states"],  # List[T x B x C]
             "src_tokens": [src_tokens],  # B x T
             "src_lengths": [],
-            'masked_encoder_out': [masked_encoder_out] if masked_tokens is not None else [],  # B x T
+            # B x T
+            'masked_encoder_out': [masked_encoder_out] if masked_tokens is not None else [],
         }
-    
+
     def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
         """
         Reorder encoder output according to *new_order*.
@@ -869,7 +877,7 @@ class PALMEncoder(TransformerEncoder):
             new_encoder_out = []
         else:
             new_encoder_out = [encoder_out["encoder_out"]
-                            [0].index_select(1, new_order)]
+                               [0].index_select(1, new_order)]
         if len(encoder_out["encoder_padding_mask"]) == 0:
             new_encoder_padding_mask = []
         else:
@@ -880,13 +888,14 @@ class PALMEncoder(TransformerEncoder):
         if len(encoder_out["masked_encoder_out"]) == 0:
             new_masked_out = []
         else:
-            new_masked_out = [encoder_out["masked_encoder_out"][0].index_select(0, new_order)]
+            new_masked_out = [encoder_out["masked_encoder_out"]
+                              [0].index_select(0, new_order)]
 
         if len(encoder_out["src_tokens"]) == 0:
             src_tokens = []
         else:
             src_tokens = [(encoder_out["src_tokens"][0]
-                        ).index_select(0, new_order)]
+                           ).index_select(0, new_order)]
         # if len(encoder_out["src_lengths"]) == 0:
         #     src_lengths = []
         # else:
@@ -1157,7 +1166,6 @@ def mpalm_base_wmt20_architecture(args):
 #             "encoder_padding_mask": [encoder_padding_mask],
 #             "src_tokens": [src_tokens],  # B x T
 #         }
-
 
 
 #     def max_positions(self):
