@@ -1,6 +1,7 @@
 total_updates=200000
 warmup_updates=500      
-lr=3e-05
+#lr=3e-05
+lr=0.001
 max_tokens=4096
 UPDATE_FREQ=4
 pointer_layer=-2

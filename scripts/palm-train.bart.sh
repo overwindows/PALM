@@ -1,16 +1,15 @@
 total_updates=200000
 warmup_updates=500      
 lr=3e-05
-#lr=0.001
 max_tokens=4096
-UPDATE_FREQ=4
+update_freq=4
 pointer_layer=-2
-roberta_path=/bigdata/roberta.base/model.pt
-EXP_NAME=palm_roberta
+bart_path=/bigdata/bart.base/model.pt
+exp_name=palm_bart
 
 CUDA_VISIBLE_DEVICES=1 python -m utils.train /datadrive/cnn_dm_bin \
     --user-dir src \
-    --restore-file $roberta_path \
+    --restore-file $bart_path \
     --max-tokens $max_tokens \
     --task auto_encoding_regressive \
     --source-lang source --target-lang target \
@@ -27,7 +26,7 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train /datadrive/cnn_dm_bin \
     --clip-norm 0.1 \
     --eval-bleu \
     --lr-scheduler inverse_sqrt --lr $lr --max-update $total_updates --warmup-updates $warmup_updates \
-    --update-freq $UPDATE_FREQ \
+    --update-freq $update_freq \
     --skip-invalid-size-inputs-valid-test \
     --alignment-layer "$pointer_layer" \
     --alignment-heads 1 \
@@ -39,7 +38,7 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train /datadrive/cnn_dm_bin \
     --keep-best-checkpoints -1 \
     --no-epoch-checkpoints \
     --best-checkpoint-metric loss \
-    --act-dropout 0.1 --save-dir /bigdata/"$EXP_NAME"_checkpoints --tensorboard-logdir /bigdata/logdir/"$EXP_NAME"
+    --act-dropout 0.1 --save-dir /bigdata/"$exp_name"_checkpoints --tensorboard-logdir /bigdata/logdir/"$exp_name"
 
     # --source-position-markers 1000 \
     # --train-subset train \
@@ -53,6 +52,7 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train /datadrive/cnn_dm_bin \
     # --decoder-embed-dim 512 \
     # --decoder-ffn-embed-dim 2048 \
     # --decoder-attention-heads 8 \
+    # --restore-file $roberta_path \
 
 
 

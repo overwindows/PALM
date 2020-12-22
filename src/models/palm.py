@@ -60,7 +60,7 @@ class PALMModel(TransformerModel):
 
         # We follow BERT's random weight initialization
         self.apply(init_bert_params)
-
+        self.args = args
         if hasattr(self.encoder, "dictionary"):
             self.eos: int = self.encoder.dictionary.eos()
 
@@ -232,18 +232,22 @@ class PALMModel(TransformerModel):
     def upgrade_state_dict_named(self, state_dict, name):
         prefix = name + "." if name != "" else ""
 
-        # Finetune on fairseq roberta model.
-        for k in list(state_dict.keys()):
-            if k.startswith(prefix + "decoder"):
-                # For encoder
-                new_k_e = prefix + "encoder" + \
-                    k[len(prefix + "decoder.sentence_encoder"):]
-                # For decoder
-                new_k_d = prefix + "decoder" + \
-                    k[len(prefix + "decoder.sentence_encoder"):]
-                state_dict[new_k_e] = state_dict[k]
-                state_dict[new_k_d] = state_dict[k]
-                del state_dict[k]
+        restore_model_name = self.args.restore_file.split('/')[-2].split('.')[0]
+        # assert restore_model_name == 'roberta', self.args.restore_file
+        
+        if restore_model_name == 'roberta':
+            # Finetune on fairseq roberta model.
+            for k in list(state_dict.keys()):
+                if k.startswith(prefix + "decoder"):
+                    # For encoder
+                    new_k_e = prefix + "encoder" + \
+                        k[len(prefix + "decoder.sentence_encoder"):]
+                    # For decoder
+                    new_k_d = prefix + "decoder" + \
+                        k[len(prefix + "decoder.sentence_encoder"):]
+                    state_dict[new_k_e] = state_dict[k]
+                    state_dict[new_k_d] = state_dict[k]
+                    del state_dict[k]
 
         super().upgrade_state_dict_named(state_dict, name)
 
@@ -294,23 +298,28 @@ class PALMModel(TransformerModel):
         for k in keys_to_delete:
             del state_dict[k]
 
-        def truncate_emb(key):
+        def truncate_emb(key, offset=1):
             if key in state_dict:
-                state_dict[key] = state_dict[key][:-1, :]
+                state_dict[key] = state_dict[key][:-offset, :]
 
         # When finetuning on translation task, remove last row of
         # embedding matrix that corresponds to mask_idx token.
         # print(state_dict.keys())
-        loaded_dict_size = state_dict["encoder.embed_tokens.weight"].size(
-            0)
+        loaded_dict_size = state_dict["encoder.embed_tokens.weight"].size(0)
+        # print("loaded dict size: {}".format(loaded_dict_size))
         if (
             loaded_dict_size == len(self.encoder.dictionary) + 1
             and "<mask>" not in self.encoder.dictionary
         ):
-            truncate_emb("encoder.sentence_encoder.embed_tokens.weight")
-            truncate_emb("decoder.embed_tokens.weight")
-            truncate_emb("encoder.sentence_encoder.output_projection.weight")
-            truncate_emb("decoder.output_projection.weight")
+            truncate_emb("encoder.embed_tokens.weight", 1)
+            truncate_emb("decoder.embed_tokens.weight", 1)
+            truncate_emb("encoder.output_projection.weight", 1)
+            truncate_emb("decoder.output_projection.weight", 1)
+        elif loaded_dict_size > len(self.encoder.dictionary):
+            truncate_emb("encoder.embed_tokens.weight", loaded_dict_size-len(self.encoder.dictionary))
+            truncate_emb("decoder.embed_tokens.weight", loaded_dict_size-len(self.encoder.dictionary))
+            truncate_emb("encoder.output_projection.weight", loaded_dict_size-len(self.encoder.dictionary))
+            truncate_emb("decoder.output_projection.weight", loaded_dict_size-len(self.encoder.dictionary))
 
         # When continued pretraining on new set of languages for mbart,
         # add extra lang embeddings at the end of embed_tokens.
