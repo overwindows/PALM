@@ -5,7 +5,7 @@ max_tokens=4096
 update_freq=4
 pointer_layer=-2
 
-CUDA_VISIBLE_DEVICES=1 fairseq-train /datadrive/cnn_dm_bin \
+CUDA_VISIBLE_DEVICES=0 fairseq-train /datadrive/cnn_dm_bin \
     --user-dir ~/fairseq/examples/pointer_generator/pointer_generator_src \
     --max-tokens "$max_tokens" \
     --task translation \
