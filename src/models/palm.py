@@ -223,7 +223,8 @@ class PALMModel(TransformerModel):
 
         self.upgrade_state_dict(state_dict)
         new_state_dict = prune_state_dict(state_dict, model_cfg)
-        return super().load_state_dict(new_state_dict, False)
+        strict = False
+        return super().load_state_dict(new_state_dict, strict)
 
     def upgrade_state_dict(self, state_dict):
         """Upgrade old state dicts to work with newer code."""
@@ -232,7 +233,9 @@ class PALMModel(TransformerModel):
     def upgrade_state_dict_named(self, state_dict, name):
         prefix = name + "." if name != "" else ""
 
-        restore_model_name = self.args.restore_file.split('/')[-2].split('.')[0]
+        restore_model_name = None
+        if len(self.args.restore_file.split('/')) > 1:
+            restore_model_name = self.args.restore_file.split('/')[-2].split('.')[0]
         # assert restore_model_name == 'roberta', self.args.restore_file
         
         if restore_model_name == 'roberta':
@@ -320,6 +323,16 @@ class PALMModel(TransformerModel):
             truncate_emb("decoder.embed_tokens.weight", loaded_dict_size-len(self.encoder.dictionary))
             truncate_emb("encoder.output_projection.weight", loaded_dict_size-len(self.encoder.dictionary))
             truncate_emb("decoder.output_projection.weight", loaded_dict_size-len(self.encoder.dictionary))
+        elif loaded_dict_size == len(self.encoder.dictionary) - 1 and '<mask>' not in state_dict:
+            x = torch.rand(1,state_dict["encoder.embed_tokens.weight"].size(1))
+            # print(x.size())
+            # print(state_dict.keys())
+            state_dict["encoder.embed_tokens.weight"] = torch.cat((state_dict["encoder.embed_tokens.weight"],x),0)
+            state_dict["decoder.embed_tokens.weight"] = torch.cat((state_dict["decoder.embed_tokens.weight"],x),0)
+            if "encoder.output_projection.weight" in state_dict:
+                state_dict["encoder.output_projection.weight"] = torch.cat((state_dict["encoder.output_projection.weight"],x),0)
+            state_dict["decoder.output_projection.weight"] = torch.cat((state_dict["decoder.output_projection.weight"],x),0)
+
 
         # When continued pretraining on new set of languages for mbart,
         # add extra lang embeddings at the end of embed_tokens.
