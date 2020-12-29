@@ -37,20 +37,21 @@ CUDA_VISIBLE_DEVICES=1 python -m utils.train /datadrive/cnn_dm_bin \
     --keep-best-checkpoints -1 \
     --no-epoch-checkpoints \
     --best-checkpoint-metric loss \
+    --wandb-project PALM \
+    --encoder-embed-dim 512 \
+    --encoder-ffn-embed-dim 2048 \
+    --encoder-attention-heads 8 \
+    --decoder-embed-dim 512 \
+    --decoder-ffn-embed-dim 2048 \
+    --decoder-attention-heads 8 \
+    --fp16 \
     --act-dropout 0.1 --save-dir /bigdata/palm_checkpoints --tensorboard-logdir /bigdata/logdir/palm
 
     # --source-position-markers 1000 \
     # --train-subset train \
     # --valid-subset valid \
     # --validate-interval 1 \
-    # --max-tokens-valid 2048 \
-    # --fp16 \
-    # --encoder-embed-dim 512 \
-    # --encoder-ffn-embed-dim 2048 \
-    # --encoder-attention-heads 8 \
-    # --decoder-embed-dim 512 \
-    # --decoder-ffn-embed-dim 2048 \
-    # --decoder-attention-heads 8 \
+    # --max-tokens-valid 4096 \
     # --restore-file $roberta_path \
 
 

@@ -1,5 +1,5 @@
 DATA_BIN=/datadrive/cnn_dm_bin
-EXP_NAME=palm_trans
+EXP_NAME=baseline
 total_updates=200000
 warmup_updates=500
 lr=0.001
@@ -37,7 +37,9 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --no-epoch-checkpoints \
 --best-checkpoint-metric loss \
 --save-dir /bigdata/"$EXP_NAME"_checkpoints \
+--eval-bleu \
 --tensorboard-logdir /bigdata/logdir/$EXP_NAME --reset-optimizer
+
 
 # --sample-break-mode complete_doc \
 # --mask 0.3 \
@@ -76,5 +78,4 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 # --patience -1 \
 # --pooler-activation-fn tanh
 # --tensorboard-logdir /bigdata/logdir/debug
-# --eval-bleu \
 # --reset-optimizer --reset-meters --reset-dataloader 
