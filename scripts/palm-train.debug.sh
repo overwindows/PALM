@@ -29,7 +29,6 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --update-freq 4 --source-position-markers 1000 \
 --train-subset train \
 --valid-subset valid \
---validate-interval 1 \
 --max-tokens-valid 2048 \
 --keep-interval-updates -1 \
 --keep-last-epochs -1 \
