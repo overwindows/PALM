@@ -41,6 +41,8 @@ sh scripts/preprocess.sh
 ```
 sh scripts/palm-train.sh
 ```
+## Experiments
+You can find a training example [here](https://wandb.ai/wuchen/PALM/runs/3uosagk7)
 <!--# Evaluate on the CNN-DM test dataset-->
 <!--# Get pre-trained models from scrach-->
 
