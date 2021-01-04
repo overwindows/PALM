@@ -44,6 +44,33 @@ sh scripts/palm-train.sh
 <!--# Evaluate on the CNN-DM test dataset-->
 <!--# Get pre-trained models from scrach-->
 
+# Pre-training with PALM
+## Download Pre-training Data
+### [Wikipedia](https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip)
+ ```
+wget https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip
+unzip wikitext-103-raw-v1.zip
+ ```
+
+## Create Pretraining Data
+```
+python3 -m utils.create_pretraining_data /bigdata/wikitext-103-raw
+```
+## Preprocess
+Change the task name in the script(e.g. wikitext).
+```
+sh scripts/bpe-preprocess.sh
+```
+## Binarize
+Change the task name in the script(e.g. wikitext).
+```
+sh scripts/palm-preprocess.sh
+```
+## Pre-Train
+Change the data directory in the script(e.g. wikitext_bin)
+```
+sh scripts/palm-train.sh
+```
 # Acknowledgments
 We extended [Fairseq](https://github.com/pytorch/fairseq) to support PALM by adding *Auto_Encoding_Regressive* task, *PALM* model and *Label_Smoothed_Cross_Entropy_with_Masked_LM* criterion.
 

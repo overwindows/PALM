@@ -1,4 +1,5 @@
-TASK=cnn_dm
+# TASK=cnn_dm
+TASK=wikitext
 
 fairseq-preprocess \
   --source-lang source \

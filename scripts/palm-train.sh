@@ -6,8 +6,10 @@ max_tokens=4096
 UPDATE_FREQ=4
 pointer_layer=-2
 roberta_path=/bigdata/roberta.base/model.pt
+# data_bin=/datadrive/cnn_dm_bin
+data_bin=/datadrive/wikitext_bin
 
-CUDA_VISIBLE_DEVICES=0 python -m utils.train /datadrive/cnn_dm_bin \
+CUDA_VISIBLE_DEVICES=1 python -m utils.train "$data_bin" \
     --user-dir src --truncate-source --source-lang source --target-lang target \
     --task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
     --layernorm-embedding --share-all-embeddings --share-decoder-input-output-embed \
