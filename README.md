@@ -41,7 +41,7 @@ sh scripts/preprocess.sh
 ```
 sh scripts/palm-train.sh
 ```
-You can find a training example [here](https://wandb.ai/wuchen/PALM/runs/3uosagk7)
+You can find a training experiment example [here](https://wandb.ai/wuchen/PALM/runs/3uosagk7)
 <!--# Evaluate on the CNN-DM test dataset-->
 <!--# Get pre-trained models from scrach-->
 
@@ -67,6 +67,7 @@ Change the task name in the script(e.g. wikitext).
 ```
 sh scripts/palm-preprocess.sh
 ```
+You can find a trainning experiment example [here](https://wandb.ai/wuchen/PALM/runs/1foxq87a)
 ## Pre-Train
 Change the data directory in the script(e.g. wikitext_bin)
 ```

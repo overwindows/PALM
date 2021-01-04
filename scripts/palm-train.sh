@@ -1,4 +1,4 @@
-total_updates=400000
+total_updates=500000
 warmup_updates=500      
 #lr=3e-05
 lr=0.001
