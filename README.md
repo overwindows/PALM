@@ -47,7 +47,7 @@ You can find a training experiment example [here](https://wandb.ai/wuchen/PALM/r
 
 # Pre-training with PALM
 ## Download Pre-training Data
-### [Wikipedia](https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip)
+- [Wikipedia](https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip)
  ```
 wget https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip
 unzip wikitext-103-raw-v1.zip
