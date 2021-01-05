@@ -67,12 +67,13 @@ Change the task name in the script(e.g. wikitext).
 ```
 sh scripts/palm-preprocess.sh
 ```
-You can find a trainning experiment example [here](https://wandb.ai/wuchen/PALM/runs/1foxq87a)
 ## Pre-Train
 Change the data directory in the script(e.g. wikitext_bin)
 ```
 sh scripts/palm-train.sh
 ```
+You can find a trainning experiment example [here](https://wandb.ai/wuchen/PALM/runs/1foxq87a)
+
 # Acknowledgments
 We extended [Fairseq](https://github.com/pytorch/fairseq) to support PALM by adding *Auto_Encoding_Regressive* task, *PALM* model and *Label_Smoothed_Cross_Entropy_with_Masked_LM* criterion.
 
