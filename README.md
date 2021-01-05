@@ -53,7 +53,7 @@ wget https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.
 unzip wikitext-103-raw-v1.zip
  ```
 
-## Create Pretraining Data
+## Create Pre-training Data
 ```
 python3 -m utils.create_pretraining_data /bigdata/wikitext-103-raw
 ```
