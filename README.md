@@ -8,7 +8,7 @@ Source code for the paper: **PALM: Pre-training an Autoencoding&Autoregressive L
 - PyTorch version >= 1.0.0
 - Python version >= 3.6
 
-# Downloads
+# CNN-DM Task with PALM
 ## Download [CNN-DM Data](https://github.com/abisee/cnn-dailymail)
 - [CNN Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfTHk4NFg2SndKcjQ)
 - [DailyMail Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfM1BxdkxVaTY2bWs)
@@ -37,7 +37,7 @@ sh scripts/bpe_preprocess.sh
 sh scripts/preprocess.sh
 ```
 
-# Train without the pre-trained model
+## Train without the pre-trained model
 ```
 sh scripts/palm-train.sh
 ```
