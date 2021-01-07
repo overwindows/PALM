@@ -8,7 +8,7 @@ Source code for the paper: **PALM: Pre-training an Autoencoding&Autoregressive L
 - PyTorch version >= 1.0.0
 - Python version >= 3.6
 
-# Downloads
+# CNN-DM Task with PALM
 ## Download [CNN-DM Data](https://github.com/abisee/cnn-dailymail)
 - [CNN Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfTHk4NFg2SndKcjQ)
 - [DailyMail Stories](https://drive.google.com/uc?export=download&id=0BwmD_VLjROrfM1BxdkxVaTY2bWs)
@@ -37,7 +37,7 @@ sh scripts/bpe_preprocess.sh
 sh scripts/preprocess.sh
 ```
 
-# Train without the pre-trained model
+## Train without the pre-trained model
 ```
 sh scripts/palm-train.sh
 ```
@@ -47,13 +47,13 @@ You can find a training experiment example [here](https://wandb.ai/wuchen/PALM/r
 
 # Pre-training with PALM
 ## Download Pre-training Data
-### [Wikipedia](https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip)
+- [Wikipedia](https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip)
  ```
 wget https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip
 unzip wikitext-103-raw-v1.zip
  ```
 
-## Create Pretraining Data
+## Create Pre-training Data
 ```
 python3 -m utils.create_pretraining_data /bigdata/wikitext-103-raw
 ```
@@ -67,12 +67,13 @@ Change the task name in the script(e.g. wikitext).
 ```
 sh scripts/palm-preprocess.sh
 ```
-You can find a trainning experiment example [here](https://wandb.ai/wuchen/PALM/runs/1foxq87a)
 ## Pre-Train
 Change the data directory in the script(e.g. wikitext_bin)
 ```
 sh scripts/palm-train.sh
 ```
+You can find a trainning experiment example [here](https://wandb.ai/wuchen/PALM/runs/1foxq87a)
+
 # Acknowledgments
 We extended [Fairseq](https://github.com/pytorch/fairseq) to support PALM by adding *Auto_Encoding_Regressive* task, *PALM* model and *Label_Smoothed_Cross_Entropy_with_Masked_LM* criterion.
 
