@@ -108,7 +108,6 @@ def main(cfg: DictConfig, override_args=None):
         for i, sample in enumerate(progress):
             sample = utils.move_to_cuda(sample) if use_cuda else sample
             _loss, _sample_size, log_output = task.valid_step(sample, model, criterion)
-            # print(_loss, _sample_size)
             progress.log(log_output, step=i)
             log_outputs.append(log_output)
 
@@ -124,6 +123,7 @@ def main(cfg: DictConfig, override_args=None):
             task.reduce_metrics(log_outputs, criterion)
             log_output = agg.get_smoothed_values()
 
+        # print(log_output)
         progress.print(log_output, tag=subset, step=i)
 
 

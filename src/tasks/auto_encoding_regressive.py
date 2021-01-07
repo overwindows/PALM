@@ -55,7 +55,7 @@ def load_langpair_dataset(
     mask_idx: int = 0,
     seed: int = 1,
     mask_prob: float = 0.01,
-    leave_unmasked_prob: float = 0.99,
+    leave_unmasked_prob: float = 0.0,
     random_token_prob: float = 0.0,
     freq_weighted_replacement: bool = False,
     mask_whole_words: torch.Tensor = None,
@@ -176,8 +176,9 @@ def load_langpair_dataset(
     )
     
     # Print samples.
-    # print(src_dataset[-1])
-    # print(masked_src_dataset[-1])
+    # if split == 'valid':
+    #     print(src_dataset[1])
+    #     print(masked_src_dataset[1])
 
     return LanguagePairDataset(
         src_dataset,
@@ -272,6 +273,46 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
                                  'e.g., \'{"beam": 4, "lenpen": 0.6}\'')
         parser.add_argument('--eval-bleu-print-samples', action='store_true',
                             help='print sample generations during validation')
+
+        parser.add_argument(
+            "--mask-prob",
+            default=0.15,
+            type=float,
+            help="probability of replacing a token with mask",
+        )
+        parser.add_argument(
+            "--leave-unmasked-prob",
+            default=0.1,
+            type=float,
+            help="probability that a masked token is unmasked",
+        )
+        parser.add_argument(
+            "--random-token-prob",
+            default=0.1,
+            type=float,
+            help="probability of replacing a token with a random token",
+        )
+        parser.add_argument(
+            "--freq-weighted-replacement",
+            default=False,
+            action="store_true",
+            help="sample random replacement words based on word frequencies",
+        )
+        parser.add_argument(
+            "--mask-whole-words",
+            default=False,
+            action="store_true",
+            help="mask whole words; you may also want to set --bpe",
+        )
+        parser.add_argument(
+            "--mask-multiple-length",
+            default=1,
+            type=int,
+            help="repeat the mask indices multiple times",
+        )
+        parser.add_argument(
+            "--mask-stdev", default=0.0, type=float, help="stdev of the mask length"
+        )
         # fmt: on
         # parser.add_argument(
         #     "--sent-loss",
@@ -430,6 +471,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
 
     def valid_step(self, sample, model, criterion):
         loss, sample_size, logging_output = super().valid_step(sample, model, criterion)
+        # print(logging_output)
         if self.args.eval_bleu:
             bleu = self._inference_with_bleu(
                 self.sequence_generator, sample, model)
@@ -444,6 +486,7 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
         return loss, sample_size, logging_output
 
     def reduce_metrics(self, logging_outputs, criterion):
+        # print('reduce_metrics')
         super().reduce_metrics(logging_outputs, criterion)
         if self.args.eval_bleu:
 

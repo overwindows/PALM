@@ -38,7 +38,11 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
+
+        assert sample['masked_source'].size(0) == sample["target"].size(0)
+
         masked_tokens = sample["masked_source"].ne(self.padding_idx)
+        assert masked_tokens.size() == sample['masked_source'].size()
         masked_sample_size = masked_tokens.int().sum()
 
         # Rare: when all tokens are masked, project all tokens.
@@ -71,6 +75,8 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
             sample["target"].size(
                 0) if self.sentence_avg else sample["ntokens"]
         )
+
+        assert masked_sample_size > 0
         # loss for encoder
         masked_loss = self.compute_masked_loss(masked_targets, net_output)
 
@@ -83,7 +89,7 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
             "sample_size": sample_size,
             "masked_sample_size": masked_sample_size,
         }
-
+        # print(logging_output)
         alignment_loss = None
 
         # Compute alignment loss only for training set and non dummy batches.
@@ -94,7 +100,6 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
             logging_output["alignment_loss"] = utils.item(alignment_loss.data)
             loss += self.alignment_lambda * alignment_loss
 
- 
         loss += masked_loss
     
         return loss, sample_size, logging_output
@@ -160,7 +165,7 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
         metrics.log_scalar(
             "nll_loss", nll_loss_sum / ntokens / math.log(2), ntokens, round=3
         )
-        assert masked_sample_size > 0
+        # print(masked_sample_size)
         metrics.log_scalar(
             "masked_loss", masked_loss_sum / masked_sample_size / math.log(2), masked_sample_size, round=3
         )
@@ -224,13 +229,6 @@ class LabelSmoothedCrossEntropyCriterionWithMaskedLM(
 #         targets = model.get_targets(sample, [logits])
 #         if masked_tokens is not None:
 #             targets = targets[masked_tokens]
-
-#         loss = modules.cross_entropy(
-#             logits.view(-1, logits.size(-1)),
-#             targets.view(-1),
-#             reduction="sum",
-#             ignore_index=self.padding_idx,
-#         )
 
 #         logging_output = {
 #             "loss": loss if self.tpu else loss.data,
