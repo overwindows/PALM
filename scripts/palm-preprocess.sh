@@ -1,6 +1,8 @@
 # TASK=cnn_dm
 TASK=wikitext
 
+rm -rf /datadrive/${TASK}_bin
+
 fairseq-preprocess \
   --source-lang source \
   --target-lang target \
@@ -8,5 +10,5 @@ fairseq-preprocess \
   --validpref /datadrive/${TASK}/val.bpe \
   --destdir /datadrive/${TASK}_bin/ \
   --workers 60 \
-  --srcdict dict.txt \
+  --srcdict gpt2_bpe/dict.txt \
   --joined-dictionary

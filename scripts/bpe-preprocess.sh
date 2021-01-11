@@ -6,8 +6,8 @@ do
   for LANG in source target
   do
     python -m utils.multiprocessing_bpe_encoder \
-    --encoder-json encoder.json \
-    --vocab-bpe vocab.bpe \
+    --encoder-json gpt2_bpe/encoder.json \
+    --vocab-bpe gpt2_bpe/vocab.bpe \
     --inputs "/datadrive/$TASK/$SPLIT.$LANG" \
     --outputs "/datadrive/$TASK/$SPLIT.bpe.$LANG" \
     --workers 60 \

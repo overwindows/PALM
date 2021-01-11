@@ -11,6 +11,7 @@ dm_double_close_quote = u'\u201d'
 END_TOKENS = ['.', '!', '?', '...', "'", "`", '"', dm_single_close_quote,
               dm_double_close_quote, ")", ' ', '\t']  # acceptable ways to end a sentence
 
+TOKENS_LEN = 1024
 wiki_train_raw = "wiki.train.raw"
 wiki_val_raw = "wiki.valid.raw"
 wiki_test_raw = "wiki.test.raw"
@@ -21,13 +22,46 @@ finished_files_dir = "/datadrive/wikitext"
 # num_expected_cnn_stories = 92579
 # num_expected_dm_stories = 219506
 
+def styles(input):
+    str = input.strip()
+    lvl = 0
+    space = False
+    for c in str:
+        if c == '=':
+            lvl += 1
+            space = False
+        elif c == ' ' and not space:
+            space = True
+        else:
+            break
+    return lvl       
 
 def read_text_file(text_file):
     lines = []
     with open(text_file, "r") as f:
         for line in f:
-            if line.strip() and not line.strip().startswith('= = =') and len(line.strip()) > 16:
-                lines.append(line.strip())
+            line = line.strip()
+            level = 0
+
+            if line.strip() and line.strip().startswith('= '):
+                lvl_fwd = styles(line)
+                lvl_bwd = styles(line[::-1])
+                if lvl_fwd == lvl_bwd:
+                    level = lvl_fwd
+            elif len(line.split()) < 8:
+                continue
+
+            if level > 0:
+                continue
+            else:
+                if len(lines) > 0 and len(lines[-1].split()) + len(line.split()) < TOKENS_LEN:
+                    lines[-1] = lines[-1] + ' ' + line
+                else:
+                    lines.append(line)
+
+            # if line.strip() and not line.strip().startswith('= = =') and len(line.strip()) > 16:
+            #     lines.append(line.strip())
+    # print(len(lines))
     return lines
 
 
@@ -77,8 +111,6 @@ def get_src_tgt(line):
     # # Make article into a single string
     # article = ' '.join(article_lines)
 
-    # # Make abstract into a signle string
-    # abstract = ' '.join(highlights)
     idx = int(len(line) * 0.8)
     for i in range(idx, -1, -1):
         if line[i] in END_TOKENS:
@@ -98,9 +130,9 @@ def write_to_bin(input_file, out_prefix):
 
     with open(out_prefix + '.source', 'wt') as source_file, open(out_prefix + '.target', 'wt') as target_file:
         for idx, s in enumerate(wiki_list):
-            if idx % 1000 == 0:
-                print("Writing wiki %i of %i; %.2f percent done" %
-                      (idx, num_wikis, float(idx)*100.0/float(num_wikis)))
+            # if idx % 1000 == 0:
+            #     print("Writing wiki %i of %i; %.2f percent done" %
+            #           (idx, num_wikis, float(idx)*100.0/float(num_wikis)))
 
             # # Look in the story dirs to find the .story file corresponding to this url
             # if os.path.isfile(os.path.join(cnn_stories_dir, s)):

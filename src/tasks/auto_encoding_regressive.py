@@ -435,6 +435,9 @@ class AutoEncodeingRegressiveTask(LegacyFairseqTask):
             shuffle=(split != "test"),
             pad_to_multiple=self.args.required_seq_len_multiple,
             mask_idx=self.mask_idx,
+            mask_prob = self.args.mask_prob,
+            leave_unmasked_prob=self.args.leave_unmasked_prob,
+            random_token_prob=self.args.random_token_prob,
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, constraints=None):

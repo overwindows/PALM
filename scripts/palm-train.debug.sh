@@ -1,11 +1,14 @@
-DATA_BIN=/datadrive/cnn_dm_bin
+DATA_BIN=/datadrive/wikitext_bin
 EXP_NAME=baseline
 total_updates=200000
 warmup_updates=500
 lr=0.001
-max_tokens=4096
+max_tokens=2048
 update_freq=4
 pointer_layer=-2
+
+rm -rf /bigdata/logdir/$EXP_NAME
+rm -rf /bigdata/"$EXP_NAME"_checkpoints
 
 CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
@@ -37,8 +40,7 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --best-checkpoint-metric loss \
 --save-dir /bigdata/"$EXP_NAME"_checkpoints \
 --eval-bleu \
---tensorboard-logdir /bigdata/logdir/$EXP_NAME --reset-optimizer
-
+--tensorboard-logdir /bigdata/logdir/$EXP_NAME --reset-optimizer --wandb-project PALM
 
 # --sample-break-mode complete_doc \
 # --mask 0.3 \

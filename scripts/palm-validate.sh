@@ -15,7 +15,7 @@ CUDA_VISIBLE_DEVICES=0 python -m utils.validate /datadrive/"$task"_bin \
 # --lr-scheduler polynomial_decay --total-num-update 20000 --warmup-updates 500 --label-smoothing 0.1 \
 # --eval-bleu-print-samples \
 # --validate-interval 1 \
-# --eval-bleu-args '{"beam": 1, "max_len_a": 1.2, "max_len_b": 10}' \
+# --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
 # --eval-bleu \
 
  
