@@ -838,6 +838,14 @@ class PALMEncoder(TransformerEncoder):
     the source tokens to the encoder output as these are otherwise not passed
     to the decoder.
     """
+    def __init__(self, args, dictionary, embed_tokens):
+        super().__init__(args, dictionary, embed_tokens)
+
+        self.lm_head_transform_weight = nn.Linear(
+            args.encoder_embed_dim, args.encoder_embed_dim
+        )
+        self.activation_fn = utils.get_activation_fn(args.activation_fn)
+        self.layer_norm = LayerNorm(args.encoder_embed_dim)
 
     def forward(self, src_tokens, src_lengths, masked_tokens=None, **kwargs):
         """
@@ -865,25 +873,26 @@ class PALMEncoder(TransformerEncoder):
                 - **src_tokens** (Tensor): input token ids of shape
                   `(batch, src_len)`
         """
-        encoder_out = super().forward(src_tokens, src_lengths, **kwargs)
-
+        encoder_out = super().forward(src_tokens, src_lengths, **kwargs) # T x B x C
         masked_encoder_out = None
         # project masked tokens
         if masked_tokens is not None:
-            x = encoder_out["encoder_out"][0].transpose(0, 1)
+            x = encoder_out["encoder_out"][0].transpose(0, 1) # B x T x C
+            # print(x.size())
             x = x[masked_tokens, :]
+            # x = self.layer_norm(self.activation_fn(self.lm_head_transform_weight(x)))
+
             # project back to size of vocabulary, self.share_input_output_embed and hasattr(self.embed_tokens, "weight")
             masked_encoder_out = F.linear(x, self.embed_tokens.weight)
-
+        # assert False
         return {
             "encoder_out": encoder_out["encoder_out"],  # T x B x C
             "encoder_padding_mask": encoder_out["encoder_padding_mask"],
             "encoder_embedding": encoder_out["encoder_embedding"],  # B x T x C
             "encoder_states": encoder_out["encoder_states"],  # List[T x B x C]
             "src_tokens": [src_tokens],  # B x T
-            "src_lengths": [],
-            # B x T
-            'masked_encoder_out': [masked_encoder_out] if masked_tokens is not None else [],
+            "src_lengths": [], # B x T
+            'masked_encoder_out': [masked_encoder_out] if masked_tokens is not None else [], 
         }
 
     def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):

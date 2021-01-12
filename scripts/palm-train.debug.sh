@@ -1,6 +1,6 @@
 DATA_BIN=/datadrive/wikitext_bin
-EXP_NAME=baseline
-total_updates=200000
+EXP_NAME=masked_lm_large
+total_updates=600000
 warmup_updates=500
 lr=0.001
 max_tokens=2048
@@ -29,7 +29,7 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --decoder-attention-heads 8 \
 --encoder-normalize-before \
 --decoder-normalize-before \
---update-freq 4 --source-position-markers 1000 \
+--update-freq 4 --source-position-markers 1024 \
 --train-subset train \
 --valid-subset valid \
 --max-tokens-valid 2048 \
