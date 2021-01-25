@@ -1,5 +1,6 @@
-DATA_BIN=/datadrive/wikitext_bin
-EXP_NAME=masked_lm_large
+DATA_BIN=/corpus/wikitext_bin
+# DATA_BIN=/datadrive/cnn_dm_bin
+EXP_NAME=palm_wiki_en
 total_updates=600000
 warmup_updates=500
 lr=0.001
@@ -10,7 +11,7 @@ pointer_layer=-2
 rm -rf /bigdata/logdir/$EXP_NAME
 rm -rf /bigdata/"$EXP_NAME"_checkpoints
 
-CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
+CUDA_VISIBLE_DEVICES=0 python -m utils.train $DATA_BIN \
 --user-dir src --truncate-source --source-lang source --target-lang target \
 --task auto_encoding_regressive --arch palm_base --criterion label_smoothed_cross_entropy_with_masked_lm --label-smoothing 0.1 \
 --share-all-embeddings --share-decoder-input-output-embed --layernorm-embedding \
@@ -39,7 +40,6 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 --no-epoch-checkpoints \
 --best-checkpoint-metric loss \
 --save-dir /bigdata/"$EXP_NAME"_checkpoints \
---eval-bleu \
 --tensorboard-logdir /bigdata/logdir/$EXP_NAME --reset-optimizer --wandb-project PALM
 
 # --sample-break-mode complete_doc \
@@ -80,3 +80,5 @@ CUDA_VISIBLE_DEVICES=2 python -m utils.train $DATA_BIN \
 # --pooler-activation-fn tanh
 # --tensorboard-logdir /bigdata/logdir/debug
 # --reset-optimizer --reset-meters --reset-dataloader 
+# --eval-bleu \
+

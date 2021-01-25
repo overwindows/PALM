@@ -16,11 +16,8 @@ wiki_train_raw = "wiki.train.raw"
 wiki_val_raw = "wiki.valid.raw"
 wiki_test_raw = "wiki.test.raw"
 
-finished_files_dir = "/datadrive/wikitext"
-
-# These are the number of .story files we expect there to be in cnn_stories_dir and dm_stories_dir
-# num_expected_cnn_stories = 92579
-# num_expected_dm_stories = 219506
+# finished_files_dir = "/datadrive/wikitext"
+finished_files_dir = "/corpus/wikitext"
 
 def styles(input):
     str = input.strip()
@@ -58,10 +55,6 @@ def read_text_file(text_file):
                     lines[-1] = lines[-1] + ' ' + line
                 else:
                     lines.append(line)
-
-            # if line.strip() and not line.strip().startswith('= = =') and len(line.strip()) > 16:
-            #     lines.append(line.strip())
-    # print(len(lines))
     return lines
 
 
@@ -117,7 +110,7 @@ def get_src_tgt(line):
           idx = i
           break
     assert idx > 0, line
-    return line[:idx], line[idx:]
+    return line[:idx].strip(), line[idx:].strip()
 
 
 def write_to_bin(input_file, out_prefix):
