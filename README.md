@@ -48,15 +48,16 @@ You can find a training experiment example [here](https://wandb.ai/wuchen/PALM/r
 # Pre-training with PALM
 ## Download Pre-training Data
 ### Wikipedia
+There are two independent datasets, wikitext-103-raw is relatively small.
 - WikiText-103
 ```
 wget https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip
 unzip wikitext-103-raw-v1.zip
 ```
 - Wikipedia Dump
-
-Process enwiki-latest-pages-articles.xml.bz2
+<!--Process enwiki-latest-pages-articles.xml.bz2-->
 ```
+wget https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
 python3 -m utils.process_wiki
 ```
 
