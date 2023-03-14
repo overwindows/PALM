@@ -1,0 +1,1 @@
+python3 -m utils.post_process_cmrc --predict_file /apdcephfs/private_kevinkyhong/fine_tuned_model/bart_finetuned_cmrc_checkpoints/generate-test.txt --sid_file /apdcephfs/private_kevinkyhong/data/cmrc2018_public/corpus/trial.ids --output_file /apdcephfs/private_kevinkyhong/fine_tuned_model/bart_finetuned_cmrc_checkpoints/generate-test-convert.json

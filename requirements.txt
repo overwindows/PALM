@@ -1,1 +1,5 @@
 gensim
+tqdm
+transformers
+rouge
+tensorboardX

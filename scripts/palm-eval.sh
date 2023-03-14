@@ -1,0 +1,1 @@
+python3 -m utils.test --predict_file /apdcephfs/private_kevinkyhong/fine_tuned_model/palm_finetune_cmrc_checkpoints/generate-test-convert.json --test_file /apdcephfs/private_kevinkyhong/data/cmrc2018_public/corpus/trial.json --output_file /apdcephfs/private_kevinkyhong/fine_tuned_model/palm_finetune_cmrc_checkpoints/generate-test-eval.json
